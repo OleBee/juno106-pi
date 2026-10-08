@@ -83,8 +83,15 @@ cat > "$MNT/tmp/ju6-chroot.sh" <<'EOC'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
 echo "-- apt: overlayroot"
-apt-get update -qq
-apt-get install -y -qq --no-install-recommends overlayroot alsa-utils >/dev/null
+# Bygg-tid: hent over https med gjentak (http-speil er ustabile); kildene settes tilbake etterpå.
+mkdir -p /tmp/apt-src-bak && cp -a /etc/apt/sources.list /etc/apt/sources.list.d /tmp/apt-src-bak/ 2>/dev/null || true
+sed -i 's|http://|https://|g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+APTOPT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30"
+for i in 1 2 3; do apt-get $APTOPT update -qq && break || { echo "apt update feilet, prøver igjen ($i)"; sleep 5; }; done
+apt-get $APTOPT install -y -qq --no-install-recommends overlayroot alsa-utils >/dev/null
+rm -rf /etc/apt/sources.list.d && cp -a /tmp/apt-src-bak/sources.list.d /etc/apt/ 2>/dev/null || mkdir -p /etc/apt/sources.list.d
+[ -f /tmp/apt-src-bak/sources.list ] && cp -a /tmp/apt-src-bak/sources.list /etc/apt/sources.list
+rm -rf /tmp/apt-src-bak
 echo "-- bruker ju6"
 id ju6 >/dev/null 2>&1 || useradd --system --user-group --no-create-home --home-dir /data/ju6 --shell /usr/sbin/nologin ju6
 usermod -aG audio ju6
