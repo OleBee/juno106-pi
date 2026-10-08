@@ -57,8 +57,8 @@ mcopy -s -n -i "$BOOTIMG" "::/*" "$MNT/boot/firmware/"
 # ---------- filer ----------
 say "installerer JU-6 Pi"
 install -D -m 0755 "$BIN" "$MNT/opt/ju6pi/bin/ju6pi"
-cp -a "$HERE/rootfs/." "$MNT/"
-chown -R root:root "$MNT/etc/ju6pi" "$MNT/etc/systemd/system/ju6pi.service" "$MNT/usr/local/sbin/ju6-prep"
+# root:root, og eksisterende kataloger (/, /etc, /usr …) beholder eier og rettigheter
+tar -C "$HERE/rootfs" --owner=0 --group=0 -cf - . | tar -C "$MNT" --no-overwrite-dir -xf -
 install -D -m 0644 "$REPO/hdmi/alsa/60-pi5-hdmi-lyd.conf" "$MNT/etc/alsa/conf.d/60-pi5-hdmi-lyd.conf"
 install -D -m 0644 "$REPO/hdmi/edid/pi5-hdmi-lyd.bin" "$MNT/lib/firmware/edid/pi5-hdmi-lyd-hdmi0.bin"
 install -D -m 0644 "$REPO/hdmi/edid/pi5-hdmi-lyd.bin" "$MNT/lib/firmware/edid/pi5-hdmi-lyd-hdmi1.bin"
