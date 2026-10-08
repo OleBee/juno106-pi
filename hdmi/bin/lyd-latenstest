@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# lyd-latenstest – finn minste stabile buffer for HDMI (eller USB) og skriv ut latensen.
+# Spiller STILLHET (trygt mot receivere), teller underløp (xruns) per innstilling.
+#
+#   lyd-latenstest [--utgang hdmi0|hdmi1|usb] [--sekunder 20] [--modus alsa|pipewire] [--last]
+#
+#   --modus alsa      (standard) direkte mot ALSA med aplay; PipeWire stoppes midlertidig
+#                     for brukeren og startes igjen etterpå. Tester periode 64…1024 × 2/3 perioder.
+#   --modus pipewire  tvinger PipeWire-quantum 256/512/1024 og leser ERR fra pw-top.
+#   --last            legger på full CPU-last på alle kjerner mens testen går (anbefalt).
+set -euo pipefail
+
+utgang=hdmi0; sek=20; modus=alsa; last=0; rate=48000
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --utgang) utgang=$2; shift 2 ;;
+        --sekunder) sek=$2; shift 2 ;;
+        --modus) modus=$2; shift 2 ;;
+        --last) last=1; shift ;;
+        -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "Ukjent valg: $1" >&2; exit 1 ;;
+    esac
+done
+case $utgang in
+    hdmi0) dev=lyd_hdmi0; perioder=(64 128 256 512 1024) ;;
+    hdmi1) dev=lyd_hdmi1; perioder=(64 128 256 512 1024) ;;
+    usb)   dev=lyd_usb;   perioder=(32 64 128 256 512) ;;
+    *) echo "--utgang må være hdmi0, hdmi1 eller usb" >&2; exit 1 ;;
+esac
+
+lastpids=()
+start_last() {
+    [[ $last == 1 ]] || return 0
+    local n; n=$(nproc)
+    if command -v stress-ng >/dev/null; then stress-ng --cpu "$n" --quiet & lastpids+=($!)
+    else for ((i = 0; i < n; i++)); do (while :; do :; done) & lastpids+=($!); done; fi
+}
+stopp_last() { [[ ${#lastpids[@]} -gt 0 ]] && kill "${lastpids[@]}" 2>/dev/null; lastpids=(); wait 2>/dev/null || true; }
+
+ms() { awk -v f="$1" -v r="$rate" 'BEGIN { printf "%.1f", f * 1000 / r }'; }
+
+resultat=()
+beste=""
+
+test_alsa() {
+    local pw_stoppet=0
+    if systemctl --user is-active --quiet pipewire 2>/dev/null; then
+        echo "Stopper PipeWire midlertidig for brukeren (startes igjen etterpå) …"
+        systemctl --user stop pipewire.socket pipewire-pulse.socket wireplumber pipewire pipewire-pulse 2>/dev/null || true
+        pw_stoppet=1
+    fi
+    trap 'stopp_last; [[ '"$pw_stoppet"' == 1 ]] && systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber pipewire pipewire-pulse 2>/dev/null' EXIT
+
+    printf '%-8s %-8s %-10s %-11s %-12s %s\n' periode perioder "periode-ms" "buffer-ms" "akseptert" underløp
+    for p in "${perioder[@]}"; do
+        for n in 2 3; do
+            start_last
+            local logg; logg=$(mktemp)
+            aplay -D "$dev" -t raw -f S16_LE -r "$rate" -c 2 \
+                  --period-size="$p" --buffer-size=$((p * n)) -d "$sek" -v /dev/zero >"$logg" 2>&1 || true
+            stopp_last
+            local ap ab ur
+            ap=$(awk '/period_size/ {v=$3} END {print v}' "$logg")
+            ab=$(awk '/buffer_size/ {v=$3} END {print v}' "$logg")
+            ur=$(grep -c 'underrun' "$logg" || true)
+            if grep -qiE 'error|No such|Invalid' "$logg" && [[ -z $ap ]]; then
+                printf '%-8s %-8s %s\n' "$p" "$n" "FEIL: $(grep -m1 -iE 'error|No such|Invalid' "$logg")"
+            else
+                printf '%-8s %-8s %-10s %-11s %-12s %s\n' "$p" "$n" "$(ms "${ap:-$p}")" "$(ms "${ab:-$((p*n))}")" "${ap:-?}/${ab:-?}" "$ur"
+                resultat+=("$p $n ${ap:-$p} ${ab:-$((p*n))} $ur")
+                if [[ $ur == 0 && -z $beste ]]; then beste="periode ${ap:-$p} × $n (buffer ${ab:-$((p*n))} rammer = $(ms "${ab:-$((p*n))}") ms)"; fi
+            fi
+            rm -f "$logg"
+        done
+    done
+}
+
+finn_nodenavn() {
+    pw-dump | python3 -c '
+import json, sys
+u = sys.argv[1]
+for o in json.load(sys.stdin):
+    p = (o.get("info") or {}).get("props") or {}
+    if o.get("type") == "PipeWire:Interface:Node" and p.get("media.class") == "Audio/Sink":
+        n, k = p.get("node.name", ""), p.get("alsa.card_name", "")
+        if (u == "hdmi0" and ("107c701400" in n or k == "vc4-hdmi-0")) or \
+           (u == "hdmi1" and ("107c706400" in n or k == "vc4-hdmi-1")) or \
+           (u == "usb" and n.startswith("alsa_output.usb-")):
+            print(n); break' "$utgang"
+}
+
+err_for() {  # ERR-kolonnen fra pw-top for noden
+    pw-top -b -n 3 2>/dev/null | awk -v n="$1" '$NF == n {e = $9} END {print e + 0}'
+}
+
+test_pipewire() {
+    local node stille
+    node=$(finn_nodenavn)
+    [[ -n $node ]] || { echo "Fant ikke $utgang i PipeWire." >&2; exit 1; }
+    stille=$(mktemp --suffix=.wav)
+    python3 - "$stille" "$sek" "$rate" <<'PY'
+import sys, wave
+f, s, r = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+w = wave.open(f, "wb"); w.setnchannels(2); w.setsampwidth(2); w.setframerate(r)
+w.writeframes(b"\0" * 4 * r * s); w.close()
+PY
+    trap 'stopp_last; pw-metadata -n settings 0 clock.force-quantum 0 >/dev/null 2>&1; rm -f "'"$stille"'"' EXIT
+    pw-metadata -n settings 0 clock.force-rate "$rate" >/dev/null
+    printf '%-8s %-11s %s\n' quantum "quantum-ms" "nye ERR"
+    for q in 256 512 1024; do
+        pw-metadata -n settings 0 clock.force-quantum "$q" >/dev/null; sleep 1
+        local f e; f=$(err_for "$node")
+        start_last
+        pw-cat -p --target "$node" --latency "$q" "$stille" || true
+        stopp_last
+        e=$(err_for "$node")
+        printf '%-8s %-11s %s\n' "$q" "$(ms "$q")" "$((e - f))"
+        if [[ $((e - f)) == 0 && -z $beste ]]; then beste="quantum $q ($(ms "$q") ms per syklus)"; fi
+    done
+    pw-metadata -n settings 0 clock.force-rate 0 >/dev/null
+}
+
+echo "Utgang: $utgang  modus: $modus  ${sek}s per steg  CPU-last: $([[ $last == 1 ]] && echo ja || echo nei)"
+case $modus in alsa) test_alsa ;; pipewire) test_pipewire ;; *) echo "--modus alsa|pipewire" >&2; exit 1 ;; esac
+echo
+if [[ -n $beste ]]; then
+    echo "Minste stabile innstilling: $beste"
+    echo "Legg til ~1 periode for sikkerhetsmargin i daglig bruk. Mottakerens egen behandlingstid kommer i tillegg."
+else
+    echo "Ingen innstilling var uten underløp – sjekk kabel/mottaker, eller prøv uten --last."
+fi

@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# lyd-utgang – vis eller bytt standard lydutgang på Pi 5.
+#   lyd-utgang status          vis utganger, standard, quantum og HDMI-mottakere
+#   lyd-utgang hdmi0           HDMI0 (ved USB-C) som standard  (primær)
+#   lyd-utgang hdmi1           HDMI1 som standard              (reserve)
+#   lyd-utgang usb             USB-lydkort som standard        (valgfri reserve)
+#   lyd-utgang auto            første som finnes av hdmi0 → hdmi1 → usb
+# Uten PipeWire endres "pcm.!default" i /etc/asound.conf i stedet (krever sudo).
+set -euo pipefail
+
+bruk() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+har_pipewire() {
+    command -v pw-dump >/dev/null 2>&1 && command -v wpctl >/dev/null 2>&1 \
+        && wpctl status >/dev/null 2>&1
+}
+
+# Skriver PipeWire-node-ID for hdmi0|hdmi1|usb (tom hvis den ikke finnes)
+finn_node() {
+    pw-dump 2>/dev/null | python3 -c '
+import json, sys
+maal = sys.argv[1]
+for o in json.load(sys.stdin):
+    if o.get("type") != "PipeWire:Interface:Node":
+        continue
+    p = (o.get("info") or {}).get("props") or {}
+    if p.get("media.class") != "Audio/Sink":
+        continue
+    navn, kort = p.get("node.name", ""), p.get("alsa.card_name", "")
+    if (maal == "hdmi0" and ("107c701400" in navn or kort == "vc4-hdmi-0")) or \
+       (maal == "hdmi1" and ("107c706400" in navn or kort == "vc4-hdmi-1")) or \
+       (maal == "usb" and navn.startswith("alsa_output.usb-")):
+        print(o["id"]); break
+' "$1"
+}
+
+hdmi_mottaker() {  # $1 = 0|1 – viser hva ELD (fra EDID) sier om mottakeren
+    local eld="/proc/asound/vc4hdmi$1/eld#0.0"
+    if [[ -r $eld ]]; then
+        awk '/monitor_present|eld_valid|monitor_name|sad0_coding_type|sad0_channels|sad0_rates/ {printf "    %s\n", $0}' "$eld"
+    else
+        echo "    (ingen ELD – vc4hdmi$1 finnes ikke; mangler EDID med lyd/tvunget hotplug?)"
+    fi
+}
+
+status() {
+    echo "== ALSA-kort"; aplay -l 2>/dev/null | grep '^card' || echo "  (aplay fant ingen kort)"
+    for n in 0 1; do echo "== HDMI$n (vc4hdmi$n)"; hdmi_mottaker "$n"; done
+    if [[ -r /proc/cmdline ]]; then
+        echo "== Kjerne-parametre for HDMI"
+        tr ' ' '\n' </proc/cmdline | grep -E '^(video=HDMI|drm\.edid_firmware)' | sed 's/^/    /' || echo "    (ingen – tvungen HDMI er ikke aktiv)"
+    fi
+    if har_pipewire; then
+        echo "== PipeWire"
+        for u in hdmi0 hdmi1 usb; do
+            id=$(finn_node "$u"); printf '    %-6s %s\n' "$u" "${id:+node $id}${id:-finnes ikke}"
+        done
+        echo "    standard: $(wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk -F'"' '/node.description/ {print $2; exit}')"
+        pw-metadata -n settings 0 2>/dev/null | grep -E "clock\.(rate|quantum|min-quantum|force-quantum)" | sed 's/^/    /' || true
+    else
+        echo "== ALSA-standard (uten PipeWire)"
+        grep -E '^pcm\.!default' /etc/asound.conf 2>/dev/null | sed 's/^/    /' || echo "    (ikke satt)"
+    fi
+}
+
+sett_alsa() {
+    local pcm="lyd_$1"
+    if [[ -f /etc/asound.conf ]] && grep -q '^pcm\.!default' /etc/asound.conf; then
+        sudo sed -i "s/^pcm\.!default.*/pcm.!default $pcm/" /etc/asound.conf
+    else
+        echo "pcm.!default $pcm" | sudo tee -a /etc/asound.conf >/dev/null
+    fi
+    echo "ALSA-standard satt til $pcm"
+}
+
+sett() {
+    local u=$1 id
+    if har_pipewire; then
+        id=$(finn_node "$u")
+        [[ -n $id ]] || { echo "Fant ikke $u i PipeWire. Kjør 'lyd-utgang status'." >&2; return 1; }
+        wpctl set-default "$id"
+        echo "Standard utgang: $u (node $id)"
+    else
+        sett_alsa "$u"
+    fi
+}
+
+case "${1:-status}" in
+    status) status ;;
+    hdmi0|hdmi1|usb) sett "$1" ;;
+    auto)
+        for u in hdmi0 hdmi1 usb; do
+            if har_pipewire; then [[ -n $(finn_node "$u") ]] && { sett "$u"; exit 0; }
+            else
+                case $u in hdmi0) k=vc4hdmi0;; hdmi1) k=vc4hdmi1;; usb) k=Device;; esac
+                [[ -e /proc/asound/$k ]] && { sett "$u"; exit 0; }
+            fi
+        done
+        echo "Ingen av hdmi0/hdmi1/usb finnes." >&2; exit 1 ;;
+    -h|--help|hjelp) bruk ;;
+    *) bruk 1 ;;
+esac

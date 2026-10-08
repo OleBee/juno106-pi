@@ -1,0 +1,2 @@
+Upstream: https://github.com/kayrockscreenprinting/ultramaster_kr106
+Commit: bc15caee5843ab238a25d0969e68d57db2b1615f (2026-05-07 11:34:47 -0400)

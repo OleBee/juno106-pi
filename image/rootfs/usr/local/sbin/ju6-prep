@@ -1,0 +1,15 @@
+#!/bin/sh
+# Kjøres som root før ju6pi starter: CPU-ytelse, LED-tilgang og datakatalog.
+for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+  [ -w "$g" ] && echo performance > "$g" 2>/dev/null
+done
+# Status-LED (ACT, grønn) styres av synthen: blink = venter på lyd, fast = klar
+for f in /sys/class/leds/ACT/trigger /sys/class/leds/ACT/brightness; do
+  [ -e "$f" ] && chown ju6 "$f" 2>/dev/null
+done
+# Datakatalog: på JU6DATA-partisjonen hvis den finnes, ellers i RAM (overlay)
+mkdir -p /data/ju6 2>/dev/null
+chown ju6:ju6 /data/ju6 2>/dev/null
+# USB: ikke la MIDI-kontrolleren gå i strømsparing
+for f in /sys/bus/usb/devices/*/power/control; do echo on > "$f" 2>/dev/null; done
+exit 0

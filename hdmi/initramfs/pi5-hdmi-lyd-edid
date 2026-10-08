@@ -1,0 +1,12 @@
+#!/bin/sh
+# /etc/initramfs-tools/hooks/pi5-hdmi-lyd-edid
+# Legger EDID-filene i initramfs, i tilfelle vc4 lastes før rotfilsystemet.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+mkdir -p "${DESTDIR}/lib/firmware/edid"
+for f in /lib/firmware/edid/pi5-hdmi-lyd*.bin; do
+    [ -e "$f" ] && cp -a "$f" "${DESTDIR}/lib/firmware/edid/"
+done
+exit 0

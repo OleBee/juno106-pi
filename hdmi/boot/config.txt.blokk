@@ -1,0 +1,19 @@
+# >>> pi5-hdmi-lyd >>>
+# HDMI-lyd som fast standard på Raspberry Pi 5 (KMS).
+# HDMI0 = porten nærmest USB-C-strømmen (DRM: HDMI-A-1, ALSA: vc4hdmi0) = primær
+# HDMI1 = den andre porten               (DRM: HDMI-A-2, ALSA: vc4hdmi1) = reserve
+#
+# KMS-driveren (vc4-kms-v3d) skal ha lyd, så ingen "noaudio" her.
+dtoverlay=vc4-kms-v3d
+# Ikke la fastvaren skrive sine egne video=-parametre inn i cmdline.txt;
+# våre video=...D og drm.edid_firmware= i cmdline.txt skal gjelde.
+disable_fw_kms_setup=1
+# Fastvare-nivå (gamle display-stakken). Under KMS leses disse IKKE av kjernen;
+# den virkelige "tving hotplug + HDMI-modus (ikke DVI)" ligger i cmdline.txt
+# (video=HDMI-A-n:...D + drm.edid_firmware=...). De står her bare for at
+# fastvaren/oppstartsbildet også skal oppføre seg som om en HDMI-mottaker er koblet til.
+hdmi_force_hotplug:0=1
+hdmi_force_hotplug:1=1
+hdmi_drive:0=2
+hdmi_drive:1=2
+# <<< pi5-hdmi-lyd <<<

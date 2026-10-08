@@ -1,0 +1,1 @@
+video=HDMI-A-1:1280x720M@60D video=HDMI-A-2:1280x720M@60D drm.edid_firmware=HDMI-A-1:edid/pi5-hdmi-lyd-hdmi0.bin,HDMI-A-2:edid/pi5-hdmi-lyd-hdmi1.bin

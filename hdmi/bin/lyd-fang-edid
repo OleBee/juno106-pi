@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# lyd-fang-edid – lagre den EKTE EDID-en fra lydplanken/receiveren som er koblet til,
+# slik at Pi-en kan bruke den når mottakeren står i standby eller er av.
+# Fordel framfor den genererte EDID-en: beholder mottakerens egne lydformater
+# (f.eks. 5.1/7.1 LPCM) i stedet for bare 2-kanals.
+#
+#   sudo lyd-fang-edid hdmi0|hdmi1      (mottakeren må være PÅ og tilkoblet)
+#
+# NB: Når drm.edid_firmware= allerede er aktiv, viser sysfs overstyringen, ikke
+# mottakerens EDID. Fjern da drm.edid_firmware fra cmdline.txt, start på nytt, og fang.
+set -euo pipefail
+port=${1:-hdmi0}
+case $port in hdmi0) con=HDMI-A-1 ;; hdmi1) con=HDMI-A-2 ;; *) echo "Bruk: $0 hdmi0|hdmi1" >&2; exit 1 ;; esac
+maal=${MAAL:-/lib/firmware/edid/pi5-hdmi-lyd-$port.bin}
+
+if grep -q "drm.edid_firmware=[^ ]*$con" /proc/cmdline 2>/dev/null; then
+    echo "drm.edid_firmware er aktiv for $con – sysfs viser overstyringen, ikke mottakeren." >&2
+    echo "Fjern den fra cmdline.txt, start på nytt med mottakeren PÅ, og kjør igjen." >&2
+    exit 2
+fi
+
+kilde=$(ls /sys/class/drm/card*-"$con"/edid 2>/dev/null | head -n1 || true)
+[[ -n $kilde && -s $kilde ]] || { echo "Ingen EDID på $con. Er mottakeren på og kabelen i $port?" >&2; exit 3; }
+
+tmp=$(mktemp); cat "$kilde" >"$tmp"
+if ! python3 - "$tmp" <<'PY'
+import sys
+d = open(sys.argv[1], "rb").read()
+lyd = hdmi = False
+for start in range(128, len(d), 128):
+    b = d[start:start + 128]
+    if len(b) < 4 or b[0] != 0x02:
+        continue
+    i, slutt = 4, b[2]
+    while i < slutt:
+        tag, n = b[i] >> 5, b[i] & 0x1F
+        if tag == 1: lyd = True
+        if tag == 3 and b[i+1:i+4] == bytes([0x03, 0x0C, 0x00]): hdmi = True
+        i += 1 + n
+print(f"EDID: {len(d)} byte, lydblokk={'ja' if lyd else 'NEI'}, HDMI-VSDB={'ja' if hdmi else 'NEI'}")
+sys.exit(0 if (lyd and hdmi) else 1)
+PY
+then
+    echo "Denne EDID-en annonserer ikke HDMI-lyd (DVI-adapter/skjerm uten lyd?). Bruk den genererte i stedet." >&2
+    rm -f "$tmp"; exit 4
+fi
+command -v edid-decode >/dev/null && edid-decode "$tmp" | sed -n '/Audio Data Block/,/Speaker\|Vendor/p' || true
+install -D -m 0644 "$tmp" "$maal"; rm -f "$tmp"
+echo "Lagret $maal"
+[[ -d /etc/initramfs-tools ]] && command -v update-initramfs >/dev/null && update-initramfs -u || true

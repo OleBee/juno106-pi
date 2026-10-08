@@ -1,0 +1,26 @@
+[Unit]
+Description=JU-6 Pi synth (inspirert av Juno-106)
+After=local-fs.target sound.target systemd-udevd.service
+Wants=sound.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=ju6
+Group=ju6
+SupplementaryGroups=audio
+ExecStartPre=+/usr/local/sbin/ju6-prep
+ExecStart=/opt/ju6pi/bin/ju6pi --config /etc/ju6pi/ju6.conf --data /data/ju6
+Restart=always
+RestartSec=1
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+LimitNICE=-20
+Nice=-10
+IOSchedulingClass=realtime
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ju6pi
+
+[Install]
+WantedBy=multi-user.target
