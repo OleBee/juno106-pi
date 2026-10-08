@@ -274,6 +274,9 @@ make arm64              # build/ju6pi-arm64 (Cortex-A76)
 sudo image/build-image.sh 2026-10-06-raspios-trixie-arm64-lite.img.xz build/ju6pi-arm64 ju6pi.img
 xz -T0 -9 ju6pi.img
 ```
+Henger apt i qemu-chrooten, kan du laste ned `overlayroot` (all) og `cryptsetup`/`cryptsetup-bin` (arm64)
+til en katalog og kjøre `sudo DEBS=katalog image/build-image.sh …`.
+
 `build-image.sh` tar det offisielle Raspberry Pi OS Lite-imaget og bygger resten i en qemu-chroot:
 utvider rotpartisjonen, lager JU6DATA, installerer overlayroot, ju6pi, EDID og ALSA-oppsett, og slår av tjenester.
 
