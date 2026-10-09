@@ -57,6 +57,7 @@ mcopy -s -n -i "$BOOTIMG" "::/*" "$MNT/boot/firmware/"
 # ---------- filer ----------
 say "installerer JU-6 Pi"
 install -D -m 0755 "$BIN" "$MNT/opt/ju6pi/bin/ju6pi"
+# (rootfs/ inneholder også /etc/alsa/conf.d/61-ju6-dacplus.conf for Raspberry Pi DAC+)
 # root:root, og eksisterende kataloger (/, /etc, /usr …) beholder eier og rettigheter
 tar -C "$HERE/rootfs" --owner=0 --group=0 -cf - . | tar -C "$MNT" --no-overwrite-dir -xf -
 install -D -m 0644 "$REPO/hdmi/alsa/60-pi5-hdmi-lyd.conf" "$MNT/etc/alsa/conf.d/60-pi5-hdmi-lyd.conf"
@@ -151,14 +152,17 @@ EOF
 # ---------- boot: config.txt og cmdline.txt ----------
 say "config.txt og cmdline.txt"
 BF="$MNT/boot/firmware"
-python3 - "$BF/config.txt" "$REPO/hdmi/boot/config.txt.blokk" <<'EOP'
+python3 - "$BF/config.txt" "$REPO/hdmi/boot/config.txt.blokk" "$HERE/boot/dacplus.blokk" <<'EOP'
 import sys,re
-p,blk=sys.argv[1],open(sys.argv[2]).read()
+p,blk,dac=sys.argv[1],open(sys.argv[2]).read(),open(sys.argv[3]).read()
 s=open(p).read()
+# «dtoverlay=» før alle andre dtoverlay/dtparam: fastvaren laster ikke HAT-EEPROM-overlayet
+# (vi laster rpi-dacplus selv, én gang). Se https://www.raspberrypi.com/documentation/computers/config_txt.html#dtoverlay
+s="# JU-6 Pi: ikke last HAT-overlay fra EEPROM automatisk (rpi-dacplus lastes nederst)\ndtoverlay=\n\n"+s
 s=re.sub(r'(?m)^dtparam=audio=on', '#dtparam=audio=on  # (Pi 5 har ingen analog lydutgang)', s)
 s=re.sub(r'(?m)^camera_auto_detect=1', 'camera_auto_detect=0', s)
 s=re.sub(r'(?m)^display_auto_detect=1', 'display_auto_detect=0', s)
-s=s.rstrip()+"\n\n[all]\n"+blk.strip()+"\n\n# >>> ju6pi >>>\n# JU-6 Pi: ingen radio (Wi-Fi/Bluetooth av), stille oppstart\ndtoverlay=disable-wifi\ndtoverlay=disable-bt\ndisable_splash=1\n# <<< ju6pi <<<\n"
+s=s.rstrip()+"\n\n[all]\n"+blk.strip()+"\n\n# >>> ju6pi >>>\n# JU-6 Pi: ingen radio (Wi-Fi/Bluetooth av), stille oppstart\ndtoverlay=disable-wifi\ndtoverlay=disable-bt\ndisable_splash=1\n# <<< ju6pi <<<\n\n"+dac.strip()+"\n"
 open(p,'w').write(s)
 EOP
 HDMI_ARGS=$(tr -d '\n' < "$REPO/hdmi/boot/cmdline-tillegg.txt")

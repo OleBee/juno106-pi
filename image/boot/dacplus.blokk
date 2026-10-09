@@ -1,0 +1,8 @@
+# >>> ju6pi-dacplus >>>
+# Raspberry Pi DAC+ (PCM5122). Overlayet lastes alltid: sitter kortet på, dukker lydkortet
+# «RPi DAC+» opp; sitter det ikke på, feiler bare I2C-søket etter kretsen, og HDMI-lyden er
+# som før (overlayet rører bare I2S, I2C1 og /soc/sound, ikke HDMI).
+# Linjen «dtoverlay=» øverst i filen hindrer at fastvaren i tillegg laster overlayet fra
+# kortets HAT-EEPROM, så det ikke lastes to ganger.
+dtoverlay=rpi-dacplus
+# <<< ju6pi-dacplus <<<

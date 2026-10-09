@@ -2,7 +2,7 @@
 
 Et ferdig SD-kort-image som gjør en **Raspberry Pi 5 (8 GB)** til en frittstående
 polysynth i Juno-106-stil. Skriv imaget, koble til en **AKAI MPK Mini Plus** med USB og en
-HDMI-lydmottaker, og slå på. Du trenger ikke skjerm, nettverk eller oppsett.
+HDMI-lydmottaker eller et **Raspberry Pi DAC+**-lydkort (fra 1.1.0), og slå på. Du trenger ikke skjerm, nettverk eller oppsett.
 
 > **Juridisk:** JU-6 Pi er et uavhengig hobbyprosjekt. Det er *inspirert av* Juno-106,
 > men har ingen tilknytning til Roland Corporation. «Roland» og «Juno» er varemerker som
@@ -13,11 +13,13 @@ HDMI-lydmottaker, og slå på. Du trenger ikke skjerm, nettverk eller oppsett.
 
 ## 1. Kort fortalt
 
-1. Last ned `ju6pi-1.0.0.img.xz` fra [Releases](../../releases). Er den delt i
+1. Last ned `ju6pi-1.1.0.img.xz` fra [Releases](../../releases). Er den delt i
    `.part-aa`, `.part-ab` …, slår du delene sammen først (se punkt 2).
 2. Skriv imaget til et microSD-kort (minst 8 GB) med **Raspberry Pi Imager** eller **balenaEtcher**.
 3. Koble til:
-   - **HDMI0** (porten **nærmest USB-C-strømkontakten**) går til TV, lydplanke, AV-receiver eller HDMI-lydekstraktor.
+   - **Raspberry Pi DAC+** (hvis du har det): RCA-utgangene går til forsterker, mikser eller aktive høyttalere.
+     Synthen bruker kortet automatisk når det sitter på. Se punkt 5.
+   - Uten DAC+: **HDMI0** (porten **nærmest USB-C-strømkontakten**) går til TV, lydplanke, AV-receiver eller HDMI-lydekstraktor.
      HDMI1 brukes automatisk som reserve.
    - **AKAI MPK Mini Plus** kobles i en hvilken som helst USB-port.
      Andre USB-MIDI-enheter kobles også til automatisk, og du kan plugge dem inn og ut mens synthen går.
@@ -28,22 +30,23 @@ HDMI-lydmottaker, og slå på. Du trenger ikke skjerm, nettverk eller oppsett.
 |---|---|
 | blinker sakte (1 Hz) | starter, eller venter på lydutgang |
 | lyser fast | klar til å spille |
+| lyser, med to korte pauser hvert 3. sekund | klar, men på reserveutgang: `audio_output = dacplus`, og DAC+ ble ikke funnet |
 | lyser, med kort pause hvert 2. sekund | klar, men ingen MIDI-enhet funnet |
 | raske blink | side/gruppe byttet (antall blink = nummer), eller patch lagret |
 
 ## 2. Skrive SD-kortet
 
 **Raspberry Pi Imager:** *Choose Device* → Raspberry Pi 5. *Choose OS* → *Use Custom* → velg
-`ju6pi-1.0.0.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
+`ju6pi-1.1.0.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
 OS-tilpasning, svarer du **Nei / No**. Imaget er ferdig konfigurert, og tilpasningen blir ikke brukt.
 
-**balenaEtcher:** *Flash from file* → `ju6pi-1.0.0.img.xz` → *Select target* → *Flash!*
+**balenaEtcher:** *Flash from file* → `ju6pi-1.1.0.img.xz` → *Select target* → *Flash!*
 
 **Hvis filen er delt opp** (GitHub tillater maks 2 GB per fil):
 ```sh
-cat ju6pi-1.0.0.img.xz.part-* > ju6pi-1.0.0.img.xz     # Linux/macOS
-copy /b ju6pi-1.0.0.img.xz.part-aa + ju6pi-1.0.0.img.xz.part-ab ju6pi-1.0.0.img.xz   # Windows
-sha256sum -c ju6pi-1.0.0.img.xz.sha256
+cat ju6pi-1.1.0.img.xz.part-* > ju6pi-1.1.0.img.xz     # Linux/macOS
+copy /b ju6pi-1.1.0.img.xz.part-aa + ju6pi-1.1.0.img.xz.part-ab ju6pi-1.1.0.img.xz   # Windows
+sha256sum -c ju6pi-1.1.0.img.xz.sha256
 ```
 
 ## 3. Lydmotoren
@@ -52,6 +55,7 @@ Lyden lages av **[Ultramaster KR-106](https://github.com/kayrockscreenprinting/u
 Den er en komponentnivå-modell av Juno-106, kalibrert mot målinger av ekte maskinvare,
 analyse av 106-firmwaren og SPICE-simuleringer av kretsene. JU-6 Pi pakker denne kjernen inn i et eget,
 hodeløst sanntidsprogram (`ju6pi`, C++17, ALSA direkte, ingen JACK/PipeWire). Det er skrevet for Pi 5.
+Lyden går ut på Raspberry Pi DAC+ (hvis det sitter på) eller HDMI.
 
 | Del | Hva som er modellert |
 |---|---|
@@ -137,11 +141,68 @@ Juno-106-sysex (`F0 41 30 0n …` patch og `F0 41 32 0n …` parameter) lastes i
 
 ## 5. Lyd ut og latens
 
-### HDMI (standard)
+Hvilken utgang synthen bruker, styres med `audio_output` i `ju6/ju6.conf` på datapartisjonen.
+Du trenger ikke kompilere noe på nytt.
 
-Pi 5 har ingen analog lydutgang. JU-6 Pi sender derfor lyden digitalt over HDMI, som 2-kanals PCM ved 48 kHz.
+| `audio_output` | Betyr |
+|---|---|
+| `auto` (standard) | Raspberry Pi DAC+ hvis kortet sitter på, ellers HDMI0, så HDMI1, så USB-lydkort |
+| `dacplus` | Raspberry Pi DAC+. Mangler kortet, spiller synthen på HDMI0/HDMI1/USB i stedet, men varsler (se under) |
+| `hdmi` | bare HDMI0, så HDMI1, akkurat som i 1.0.0. DAC+ brukes ikke selv om det sitter på |
+| `usb` | bare USB-lydkort |
+| `null` | ingen lyd (test) |
+
+Kortene finnes etter navn, ikke nummer, så rekkefølgen ALSA nummererer dem i spiller ingen rolle.
+Den gamle innstillingen `audio_devices = hdmi0 hdmi1 usb` virker fortsatt (nå også med `dacplus` i lista),
+men bare når `audio_output` ikke er satt.
+
+### Raspberry Pi DAC+
+
+[Raspberry Pi DAC+](https://www.raspberrypi.com/products/dac-plus/) (tidligere IQaudIO DAC+) er et lydkort som settes
+på GPIO-pinnene. Det har en TI PCM5122 DAC-krets, to RCA-kontakter (linje ut, 0–2 V RMS) og en 3,5 mm
+hodetelefonutgang. Det har ingen inngang.
+
+**Montering i KKSB Højt Case med Active Cooler:**
+1. Monter Active Cooler på Pi 5 som vanlig, og koble viftekabelen til FAN-kontakten.
+2. Sett den 40-pins stacking headeren (forlengeren) som følger med kabinettet på GPIO-pinnene på Pi-en.
+   Den løfter DAC-kortet over kjøleren.
+3. Sett DAC+ på toppen av forlengeren, med RCA-kontaktene mot åpningene i kabinettet.
+   Bruk avstandsstykkene og skruene som følger med kabinettet, så kortet ikke henger bare i pinnene.
+4. Sjekk at ingen pinner er forskjøvet én rad før du setter på strøm.
+
+**Imaget er klart for kortet.** `config.txt` laster overlayet `rpi-dacplus` hver gang. Uten kortet skjer det ingenting
+med HDMI-lyden. Overlayet rører bare I2S, I2C1 og lydkort-noden, og kortet dukker bare ikke opp.
+Linjen `dtoverlay=` øverst i `config.txt` gjør at fastvaren ikke i tillegg laster overlayet fra kortets HAT-EEPROM,
+slik at det ikke lastes to ganger. (Det betyr også at andre HAT-kort ikke får overlayet sitt automatisk.)
+Eldre svarte IQaudIO DAC+-kort virker med det samme overlayet. De er elektrisk like.
+
+**Lyd:** 48 kHz, 32 bit til kretsen, og bufferen starter på 128 × 2 rammer (5,3 ms). Ved oppstart setter synthen kortets
+mikser: «Digital» til 0 dB (ikke dempet), «Analogue» til 0 dB (2 V RMS ut) og «Analogue Playback Boost» til 0 dB.
+Vil du ha lavere nivå ut, sett `dacplus_volume_db = -6` (eller annen negativ verdi). Positive verdier brukes ikke,
+for de kan gi klipping. RCA-utgangen og hodetelefonutgangen får samme stereosignal.
+
+**Oppstart:** DAC-driveren kan komme litt senere enn HDMI. Står det et DAC-kort i HAT-EEPROM-en, eller er
+`audio_output = dacplus`, venter synthen opptil 8 sekunder (`dacplus_wait`) på kortet. Startet den likevel på HDMI,
+og DAC+ dukker opp i løpet av det første minuttet, bytter den over til DAC+ og spiller klartonene på nytt der.
+
+**Når `audio_output = dacplus`, og kortet ikke blir funnet,** spiller synthen på HDMI0, HDMI1 eller USB i stedet, og
+- klartonene er **synkende** (E–A) i stedet for stigende (A–E),
+- den grønne LED-en lyser med **to korte pauser hvert 3. sekund**,
+- `ju6/status.txt` har en linje som starter med `ADVARSEL`.
+
+**Sjekke at kortet virker.** Imaget har ikke SSH eller nettverk, så du sjekker det slik:
+1. Slå på med DAC+ montert og RCA koblet til forsterkeren. Etter 10–15 sekunder skal du høre to **stigende** toner
+   fra RCA-utgangen, og LED-en skal lyse fast (eller med én kort pause hvis ingen MIDI-enhet er koblet til).
+2. Ta ut SD-kortet, sett det i en PC og åpne `ju6/status.txt` på JU6DATA. Der skal det stå
+   `lyd: Raspberry Pi DAC+ (RCA/hodetelefon) (plughw:CARD=RPiDAC,DEV=0)` og `lydkort funnet: vc4hdmi0, vc4hdmi1, RPiDAC`,
+   pluss en linje om mikseren.
+3. Har du skjerm og tastatur på Pi-en, viser `ju6pi utganger` kortene ALSA ser, og hvilken utgang som blir valgt.
+   `aplay -l` skal vise `card N: RPiDAC [RPi DAC+]`. Med SSH (finnes ikke i imaget som standard) gjelder de samme kommandoene.
+
+### HDMI
+
+Pi 5 har ingen analog lydutgang. Uten DAC+ sender JU-6 Pi derfor lyden digitalt over HDMI, som 2-kanals PCM ved 48 kHz.
 - **HDMI0** (nærmest USB-C) er primær. **HDMI1** er reserve. **USB-lydkort** er valgfri tredje utgang.
-  Rekkefølgen styres med `audio_devices` i `ju6.conf`.
 - Lyden virker **uten skjerm**. Imaget har en egen EDID (skjerm-ID) som lover 2-kanals LPCM 32–192 kHz,
   og den tvinges på begge porter via kjernen:
   `video=HDMI-A-1:1280x720M@60D drm.edid_firmware=HDMI-A-1:edid/pi5-hdmi-lyd-hdmi0.bin` (tilsvarende for HDMI-A-2).
@@ -156,20 +217,22 @@ Pi 5 har ingen analog lydutgang. JU-6 Pi sender derfor lyden digitalt over HDMI,
 Synthen starter med minste buffer og øker selv ett trinn hvis det blir gjentatte underløp
 (≥ 3 på 30 sekunder). Trinnet huskes til neste oppstart.
 
-| Trinn | HDMI periode × antall | HDMI buffer | USB-lydkort periode × antall | USB buffer |
-|---|---|---|---|---|
-| 1 (start) | 256 × 2 | **10,7 ms** | 64 × 2 | **2,7 ms** |
-| 2 | 256 × 3 | 16,0 ms | 128 × 2 | 5,3 ms |
-| 3 | 512 × 2 | 21,3 ms | 128 × 3 | 8,0 ms |
-| 4 | 512 × 3 | 32,0 ms | 256 × 2 | 10,7 ms |
-| 5 | 1024 × 2 | 42,7 ms | 256 × 3 | 16,0 ms |
-| 6 | 1024 × 3 | 64,0 ms | 512 × 2 | 21,3 ms |
+| Trinn | HDMI periode × antall | HDMI buffer | DAC+ periode × antall | DAC+ buffer | USB-lydkort periode × antall | USB buffer |
+|---|---|---|---|---|---|---|
+| 1 (start) | 256 × 2 | **10,7 ms** | 128 × 2 | **5,3 ms** | 64 × 2 | **2,7 ms** |
+| 2 | 256 × 3 | 16,0 ms | 128 × 3 | 8,0 ms | 128 × 2 | 5,3 ms |
+| 3 | 512 × 2 | 21,3 ms | 256 × 2 | 10,7 ms | 128 × 3 | 8,0 ms |
+| 4 | 512 × 3 | 32,0 ms | 256 × 3 | 16,0 ms | 256 × 2 | 10,7 ms |
+| 5 | 1024 × 2 | 42,7 ms | 512 × 2 | 21,3 ms | 256 × 3 | 16,0 ms |
+| 6 | 1024 × 3 | 64,0 ms | 512 × 3 | 32,0 ms | 512 × 2 | 21,3 ms |
 
 **Total tid fra tangent til lyd** (beregnet, ikke målt på maskinvare):
 USB-MIDI ca. 1 ms + én periode for behandling + bufferen + mottakeren.
 Med HDMI på trinn 1 blir det ca. **12–17 ms ut av Pi-en**. Selve mottakeren kommer i tillegg:
 en HDMI-lydekstraktor bruker typisk 0–2 ms, mens TV-er og AV-receivere kan bruke 20–100 ms.
 Velg da «Game»-, «Direct»- eller «Pure»-modus. USB-lydkort på trinn 2 gir ca. 7–10 ms totalt.
+DAC+ på trinn 1 gir ca. 8–10 ms ut av RCA-kontaktene, og en analog forsterker legger ikke til noe å snakke om.
+Ingen av tallene er målt på maskinvare ennå.
 Hvilken utgang og buffer synthen faktisk valgte, står i `ju6/status.txt` på datapartisjonen.
 
 ### Sanntid
@@ -200,7 +263,10 @@ Systemloggen ligger bare i RAM.
 
 | Nøkkel | Standard | Forklaring |
 |---|---|---|
-| `audio_devices` | `hdmi0 hdmi1 usb` | utganger i prioritert rekkefølge (`null` = ingen lyd) |
+| `audio_output` | `auto` | `auto`, `dacplus`, `hdmi`, `usb` eller `null` (se punkt 5) |
+| `dacplus_volume_db` | `0` | DAC+-mikseren «Digital» i dB (0 eller negativ) |
+| `dacplus_wait` | `8` | sekunder å vente på DAC+ ved oppstart |
+| `audio_devices` | (ikke satt) | gammel liste i prioritert rekkefølge (`dacplus hdmi0 hdmi1 usb null`), brukes bare uten `audio_output` |
 | `buffer` | `auto` | `auto` eller fast `PERIODExANTALL`, f.eks. `512x2` |
 | `oversample` | `auto` | VCF-oversampling `2` eller `4` |
 | `chime` | `on` | klarsignal (to toner) |
@@ -278,12 +344,37 @@ Henger apt i qemu-chrooten, kan du laste ned `overlayroot` (all) og `cryptsetup`
 til en katalog og kjøre `sudo DEBS=katalog image/build-image.sh …`.
 
 `build-image.sh` tar det offisielle Raspberry Pi OS Lite-imaget og bygger resten i en qemu-chroot:
-utvider rotpartisjonen, lager JU6DATA, installerer overlayroot, ju6pi, EDID og ALSA-oppsett, og slår av tjenester.
+utvider rotpartisjonen, lager JU6DATA, installerer overlayroot, ju6pi, EDID og ALSA-oppsett, legger inn
+DAC+-overlayet i `config.txt` (fra `image/boot/dacplus.blokk`) og slår av tjenester.
+
+`./build/ju6pi selftest` tester også valget av lydutgang mot falske ALSA-kortlister. Hele sanntidsløkka kan kjøres
+uten lydkort med `JU6_FAKE_CARDS=fil` (linjer `nummer id driver navn`, alle utganger blir ALSA `null`)
+og `JU6_LED_DIR=katalog` (falsk LED).
 
 Kommandoer på Pi-en (krever skjerm og tastatur, eller å montere SD-kortet):
-`ju6pi list` (patcher), `ju6pi bench` (CPU-margin), `ju6pi demo KATALOG` (WAV), `journalctl -u ju6pi` (logg).
+`ju6pi list` (patcher), `ju6pi bench` (CPU-margin), `ju6pi demo KATALOG` (WAV), `ju6pi utganger` (lydkort og valgt utgang),
+`journalctl -u ju6pi` (logg).
 
-## 9. Lisens og kreditering
+## 9. Endringer
+
+**1.1.0 (9. oktober 2026)**
+- Støtte for Raspberry Pi DAC+ (PCM5122, RCA og hodetelefon). Overlayet `rpi-dacplus` lastes alltid, og
+  HAT-EEPROM-overlayet slås av så det ikke lastes to ganger.
+- Ny innstilling `audio_output = auto | dacplus | hdmi | usb | null`. Standard `auto` bruker DAC+ hvis det sitter på,
+  ellers HDMI0 og så HDMI1. Kortene finnes etter navn, ikke nummer.
+- DAC+: 48 kHz, 32 bit, start på 128 × 2 rammer (5,3 ms), og mikseren settes til 0 dB uten demping ved oppstart.
+  Nivået kan senkes med `dacplus_volume_db`.
+- Venter på DAC-driveren ved oppstart, og bytter til DAC+ hvis den kommer etter at synthen har startet på HDMI.
+- Reserveutgang varsles med synkende klartoner, egen LED-rytme og `ADVARSEL` i `status.txt`.
+- `status.txt` viser utgangsvalg, lydkortene som ble funnet og DAC-mikseren.
+- Ny kommando: `ju6pi utganger`. Selvtesten dekker nå valg av lydutgang.
+- HDMI-oppsettet er uendret. `audio_output = hdmi` gir samme oppførsel som 1.0.0.
+
+**1.0.0 (8. oktober 2026)**
+- Første utgave: KR-106-lydmotor, 128 fabrikkpatcher, Juno-106-sysex, AKAI MPK Mini Plus-mapping, HDMI-lyd,
+  skrivebeskyttet SD-kort med datapartisjon.
+
+## 10. Lisens og kreditering
 
 - **GPL-3.0** (se `LICENSE`), fordi lydmotoren er GPL-3.
 - Lydmotor: **Ultramaster KR-106** av Karl LaRocca (og den opprinnelige Ultramaster-gruppen, se `third_party/kr106/AUTHORS`).

@@ -11,8 +11,9 @@ ju6/patches.syx       Lagrede patcher (lages når du lagrer første gang:
                       sysex (APR), kan åpnes i patch-editorer.
 ju6/names.txt         Navn på lagrede patcher.
 ju6/state.txt         Sist valgte patch og bufferinnstilling (automatisk).
-ju6/status.txt        Hva synthen fant ved siste oppstart: lydutgang, buffer,
-                      latens og antall MIDI-enheter. Nyttig uten skjerm.
+ju6/status.txt        Hva synthen fant ved siste oppstart: lydutgang, lydkort
+                      (RPiDAC = Raspberry Pi DAC+), buffer, latens og antall
+                      MIDI-enheter. Nyttig uten skjerm.
 ju6/fabrikk-A-B.syx   Fabrikkbankene A og B (kopi, til referanse).
 
 Tilbakestille til fabrikklyder: slett patches.syx og names.txt.

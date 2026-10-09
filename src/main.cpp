@@ -11,7 +11,7 @@
 #include <thread>
 #include <mutex>
 #ifndef JU6_VERSION
-#define JU6_VERSION "1.0.0"
+#define JU6_VERSION "1.1.0"
 #endif
 #include <pthread.h>
 #include <sched.h>
@@ -275,6 +275,42 @@ static int selftest(const std::string& wavDir) {
     writeWav(wavDir + "/mpk_simulert_pads_og_knott.wav", L, R, 48000);
     printf("  skrev %s/mpk_simulert_pads_og_knott.wav\n", wavDir.c_str());
   }
+  // Valg av lydutgang mot falske ALSA-kortlister (ingen maskinvare)
+  {
+    const CardInfo h0{0, "vc4hdmi0", "vc4-hdmi-0", "vc4-hdmi"}, h1{1, "vc4hdmi1", "vc4-hdmi-1", "vc4-hdmi"};
+    const CardInfo dac{2, "RPiDAC", "RPi DAC+", "RPi DAC+"}, dacFirst{0, "RPiDAC", "RPi DAC+", "RPi DAC+"};
+    const CardInfo iq{2, "IQaudIODAC", "IQaudIODAC", "IQaudIODAC"}, usbc{3, "Device", "USB Audio Device", "USB-Audio"};
+    const CardInfo mpk{4, "MPKminiPlus", "MPK mini Plus", "USB-Audio"};   // (MIDI-only har ingen PCM, men test navn)
+    auto cfgOf = [](std::initializer_list<std::pair<const char*, const char*>> kv) { Config c; for (auto& p : kv) c.kv[p.first] = p.second; return c; };
+    Config none;
+    auto pa = planOutputs(none);
+    check(pickKind(pa.order, {h0, h1, dac}) == "dacplus", "auto: DAC+ velges når kortet finnes");
+    check(pickKind(pa.order, {dacFirst, h0, h1}) == "dacplus", "auto: DAC+ velges uansett kortnummer");
+    check(pickKind(pa.order, {h0, h1}) == "hdmi0", "auto: uten DAC+ -> HDMI0");
+    check(pickKind(pa.order, {h1}) == "hdmi1", "auto: uten DAC+ og HDMI0 -> HDMI1");
+    check(pickKind(pa.order, {usbc}) == "usb", "auto: bare USB-lydkort -> usb");
+    check(pickKind(pa.order, {}) == "", "auto: ingen kort -> vent");
+    check(pickKind(pa.order, {h0, iq}) == "dacplus", "auto: eldre IQaudIO DAC+ gjenkjennes");
+    check(pa.wanted.empty(), "auto: ingen varsel om reserve");
+    auto pd = planOutputs(cfgOf({{"audio_output", "dacplus"}}));
+    check(pd.wanted == "dacplus" && pickKind(pd.order, {h0, h1}) == "hdmi0", "dacplus uten kort: reserve HDMI0 (med varsel)");
+    check(pickKind(pd.order, {h0, h1, dac}) == "dacplus", "dacplus med kort: DAC+");
+    auto ph = planOutputs(cfgOf({{"audio_output", "hdmi"}}));
+    check(pickKind(ph.order, {h0, h1, dac}) == "hdmi0", "hdmi: DAC+ ignoreres, HDMI0 som før");
+    check(pickKind(ph.order, {h1, dac}) == "hdmi1", "hdmi: HDMI1 som reserve, aldri DAC+");
+    check(pickKind(ph.order, {dac}) == "", "hdmi: bare DAC+ -> venter (faller ikke til DAC+)");
+    auto pu = planOutputs(cfgOf({{"audio_output", "USB"}}));
+    check(pickKind(pu.order, {h0, dac, usbc}) == "usb", "usb (store bokstaver ok): USB-lydkort");
+    auto pl = planOutputs(cfgOf({{"audio_devices", "hdmi1 hdmi0"}}));
+    check(pickKind(pl.order, {h0, h1, dac}) == "hdmi1", "gammel audio_devices-liste virker som i 1.0.0");
+    auto pb = planOutputs(cfgOf({{"audio_devices", "hdmi1"}, {"audio_output", "auto"}}));
+    check(pickKind(pb.order, {h0, h1, dac}) == "dacplus", "audio_output går foran audio_devices");
+    auto px = planOutputs(cfgOf({{"audio_output", "tull"}}));
+    check(!px.error.empty() && pickKind(px.order, {h0, dac}) == "dacplus", "ukjent verdi -> auto + advarsel");
+    check(!isDacPlus(mpk) && !isDacPlus(h0) && isDacPlus(dac) && isDacPlus(iq), "DAC+ matches på id/navn, ikke andre kort");
+    check(kindRank(pa.order, "dacplus") < kindRank(pa.order, "hdmi0"), "DAC+ rangeres over HDMI0 (bytte ved sen oppstart)");
+    check(pickKind(pa.order, {h0, dac}, {"dacplus"}) == "hdmi0", "bytte prøves bare én gang per utgang");
+  }
   printf("%s (%d feil)\n", fails ? "SELVTEST FEILET" : "SELVTEST OK", fails);
   return fails ? 1 : 0;
 }
@@ -293,19 +329,32 @@ static double benchRT(int os, double seconds) {
 // ------------------------------------------------------------ sanntid
 struct Ready {
   std::atomic<bool> audio{false}; std::atomic<int> xruns{0}; std::atomic<int> period{0}, buffer{0};
-  std::mutex m; std::string label;   // settes bare når enheten åpnes (ikke i sanntidsløkken)
+  std::atomic<bool> fallback{false};   // ønsket utgang (audio_output = dacplus) mangler, går på reserve
+  std::atomic<bool> upgrade{false};    // en høyere prioritert utgang har dukket opp: åpne på nytt
+  std::mutex m; std::string label, kind, mixer;   // settes bare når enheten åpnes (ikke i sanntidsløkken)
 };
 
-struct ChimeGen {   // kort klarsignal: to toner (A5, E6), ca. -20 dBFS
-  int pos = -1; float sr = 48000;
-  void start() { pos = 0; }
+// Står det et DAC-kort i HAT-EEPROM-en? (fastvaren legger det i /proc/device-tree/hat)
+static bool hatSaysDac() {
+  std::vector<uint8_t> b; if (!readFile("/proc/device-tree/hat/product", b)) return false;
+  std::string s(b.begin(), b.end()); return s.find("DAC") != std::string::npos;
+}
+
+static std::string cardList(const std::vector<CardInfo>& cards) {
+  std::string s; for (auto& c : cards) s += (s.empty() ? "" : ", ") + c.id;
+  return s.empty() ? "ingen" : s;
+}
+
+struct ChimeGen {   // kort klarsignal: to toner (A5, E6), ca. -20 dBFS. Reserveutgang: synkende (E6, A5).
+  int pos = -1; float sr = 48000; bool down = false;
+  void start(bool fallingTones = false) { pos = 0; down = fallingTones; }
   void add(float* L, float* R, int n) {
     if (pos < 0) return;
     for (int i = 0; i < n; i++, pos++) {
       float t = pos / sr; float v = 0;
       auto tone = [&](float t0, float f) { float u = t - t0; if (u < 0 || u > 0.35f) return 0.f;
         return std::sin(6.2831853f * f * u) * std::min(1.f, u / 0.004f) * std::exp(-u * 9.f); };
-      v = 0.1f * (tone(0.f, 880.f) + tone(0.14f, 1318.5f));
+      v = down ? 0.1f * (tone(0.f, 1318.5f) + tone(0.14f, 880.f)) : 0.1f * (tone(0.f, 880.f) + tone(0.14f, 1318.5f));
       L[i] += v / kOutGain; R[i] += v / kOutGain;
       if (t > 0.6f) { pos = -1; return; }
     }
@@ -336,7 +385,7 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
   Config state; state.load(dataDir + "/state.txt");
   int startSlot = std::clamp(state.num("slot", cfg.num("start_patch", 0)), 0, 127);
   std::map<std::string, int> levelIdx;
-  for (auto k : {"hdmi0", "hdmi1", "usb"}) levelIdx[k] = state.num(std::string("level_") + k, 0);
+  for (auto k : {"dacplus", "hdmi0", "hdmi1", "usb"}) levelIdx[k] = state.num(std::string("level_") + k, 0);
 
   Synth synth; synth.init(rate, 1024, os);
   synth.set(kSettingVoices, (float)std::clamp(cfg.num("voices", 6), 1, 10));
@@ -358,7 +407,17 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
   midi.start();
 
   Ready ready;
-  std::vector<std::string> devs = cfg.words("audio_devices", {"hdmi0", "hdmi1", "usb"});
+  const OutputPlan plan = planOutputs(cfg);
+  if (!plan.error.empty()) logf("advarsel: %s", plan.error.c_str());
+  const std::vector<std::string>& devs = plan.order;
+  std::string devsText; for (auto& k : devs) devsText += (devsText.empty() ? "" : " ") + k;
+  logf("utgangsvalg: %s -> prøver %s", plan.mode.c_str(), devsText.c_str());
+  const double dacDb = std::min(0.0, cfg.real("dacplus_volume_db", 0.0));
+  // Ved oppstart kan DAC+-driveren komme litt etter HDMI. Vent på den en kort stund hvis den
+  // er ønsket eksplisitt eller HAT-EEPROM-en sier at et DAC-kort sitter på.
+  const double dacWait = (!devs.empty() && devs[0] == "dacplus" && (plan.wanted == "dacplus" || hatSaysDac()))
+                         ? cfg.real("dacplus_wait", 8.0) : 0.0;
+  const double startedAt = nowSec();
   std::string bufCfg = cfg.str("buffer", "auto");
   bool chimeOn = cfg.flag("chime", true);
   int audioCpu = cfg.num("audio_cpu", 3);
@@ -378,17 +437,20 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
     while (gRun) {
       // Finn første tilgjengelige utgang i prioritert rekkefølge.
       OutputDevice dev; std::string err;
+      bool waitingForDac = false;
       for (auto& k : devs) {
         if (failedUntil.count(k) && failedUntil[k] > nowSec()) continue;
         dev = resolveDevice(k); if (!dev.pcm.empty()) break;
+        if (k == "dacplus" && nowSec() - startedAt < dacWait) { waitingForDac = true; break; }
       }
+      if (waitingForDac) { dev = OutputDevice{}; usleep(250000); MidiEvent e; while (midiQ.pop(e)) {} continue; }
       if (dev.pcm.empty()) {
-        static double lastMsg = 0; if (nowSec() - lastMsg > 10) { logf("venter på lydenhet (%s) ...", cfg.str("audio_devices", "hdmi0 hdmi1 usb").c_str()); lastMsg = nowSec(); }
+        static double lastMsg = 0; if (nowSec() - lastMsg > 10) { logf("venter på lydenhet (%s) ...", devsText.c_str()); lastMsg = nowSec(); }
         MidiEvent e; while (midiQ.pop(e)) {}  // ikke la køen fylles mens vi venter
         usleep(500000); continue;
       }
-      const BufferLevel* lv = dev.kind == "usb" ? kUsbLevels : dev.kind == "null" ? kNullLevels : kHdmiLevels;
-      int nlv = dev.kind == "usb" ? 6 : dev.kind == "null" ? 1 : 6;
+      const BufferLevel* lv = dev.kind == "usb" ? kUsbLevels : dev.kind == "dacplus" ? kDacLevels : dev.kind == "null" ? kNullLevels : kHdmiLevels;
+      int nlv = dev.kind == "null" ? 1 : 6;
       int li = std::clamp(levelIdx.count(dev.kind) ? levelIdx[dev.kind] : 0, 0, nlv - 1);
       BufferLevel want = lv[li];
       bool adaptive = bufCfg == "auto";
@@ -398,12 +460,19 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
         failedUntil[dev.kind] = nowSec() + 5.0; usleep(300000); continue;
       }
       failedUntil.erase(dev.kind);
+      std::string mixer;
+      if (dev.kind == "dacplus" && !dev.card.empty()) { mixer = setupDacMixer(dev.card, dacDb); logf("DAC+ %s", mixer.c_str()); }
+      bool fb = !plan.wanted.empty() && dev.kind != plan.wanted;
+      if (fb) logf("ADVARSEL: %s ble ikke funnet – bruker reserveutgangen %s", plan.wanted.c_str(), dev.label.c_str());
+      ready.fallback = fb;
       int per = std::min(out.period(), 1024);
       logf("lyd: %s, %d Hz, periode %d x %d = buffer %d rammer (%.1f ms)", dev.label.c_str(), out.rate(), out.period(),
            out.buffer() / std::max(1, out.period()), out.buffer(), out.buffer() * 1000.0 / out.rate());
-      { std::lock_guard<std::mutex> g(ready.m); ready.label = dev.label + " (" + dev.pcm + ")"; }
+      { std::lock_guard<std::mutex> g(ready.m); ready.label = dev.label + " (" + dev.pcm + ")"; ready.kind = dev.kind; ready.mixer = mixer; }
       ready.period = out.period(); ready.buffer = out.buffer(); ready.audio = true;
-      if (chimeOn && !chimed) { chime.start(); chimed = true; }
+      // Klarsignalet spilles på den utgangen som faktisk ble valgt (også etter bytte til DAC+).
+      if (chimeOn && (!chimed || ready.upgrade.load())) { chime.start(fb); chimed = true; }
+      ready.upgrade = false;
       std::vector<double> xrunTimes; double openedAt = nowSec(); bool reopen = false;
       while (gRun && !reopen) {
         double t = nowSec();
@@ -413,6 +482,7 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
         chime.add(L.data(), R.data(), per);
         int r = out.write(L.data(), R.data(), per, outGain);
         if (r < 0) { logf("lydenheten forsvant – prøver på nytt"); reopen = true; break; }
+        if (ready.upgrade.load(std::memory_order_relaxed)) { logf("bedre utgang funnet – bytter"); reopen = true; break; }
         if (r == 1) {
           ready.xruns++;
           if (t - openedAt > 3.0) xrunTimes.push_back(t);
@@ -420,7 +490,7 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
           if (adaptive && xrunTimes.size() >= 3 && li + 1 < nlv) {
             levelIdx[dev.kind] = li + 1;
             logf("for mange underløp på %d x %d – øker bufferen", want.period, want.periods);
-            Request q{}; q.type = Request::Log; q.a = li + 1; q.b = dev.kind == "usb" ? 2 : dev.kind == "hdmi1" ? 1 : 0; reqs.push(q);
+            Request q{}; q.type = Request::Log; q.a = li + 1; q.b = dev.kind == "dacplus" ? 3 : dev.kind == "usb" ? 2 : dev.kind == "hdmi1" ? 1 : 0; reqs.push(q);
             reopen = true;
           }
         }
@@ -432,7 +502,7 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
   });
 
   // Kontrolltråd: lagring, tilstand, LED.
-  Led led; bool ledOk = led.available();
+  Led led(getenv("JU6_LED_DIR") ? getenv("JU6_LED_DIR") : "/sys/class/leds/ACT"); bool ledOk = led.available();   // JU6_LED_DIR: bare for test
   if (ledOk) led.trigger("none");
   int lastSlot = startSlot; double slotChangedAt = -1; int blinkLeft = 0; double nextBlink = 0;
   bool wasReady = false;
@@ -442,7 +512,7 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
     if (ready.audio.load() != statusAudio) { statusAudio = ready.audio.load(); lastStatusAt = -100; }
     if (t - lastStatusAt > 5.0) {   // status.txt på data-partisjonen: nyttig uten skjerm/nettverk
       lastStatusAt = t;
-      std::string lbl; { std::lock_guard<std::mutex> g(ready.m); lbl = ready.label; }
+      std::string lbl, mix; { std::lock_guard<std::mutex> g(ready.m); lbl = ready.label; mix = ready.mixer; }
       char buf[512];
       snprintf(buf, sizeof buf,
                "JU-6 Pi " JU6_VERSION "\nlyd: %s\nperiode: %d rammer, buffer: %d rammer (%.1f ms) ved %d Hz\n"
@@ -450,6 +520,10 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
                ready.audio ? lbl.c_str() : "venter på lydenhet", ready.period.load(), ready.buffer.load(),
                ready.buffer.load() * 1000.0 / rate, rate, os, midi.connectedCount(), ready.xruns.load() / 10 * 10);
       std::string st = buf;
+      st += "utgangsvalg: " + plan.mode + " (rekkefølge: " + devsText + ")\n";
+      st += "lydkort funnet: " + cardList(listCards()) + "\n";
+      if (!mix.empty()) st += "DAC+ " + mix + "\n";
+      if (ready.audio && ready.fallback) st += "ADVARSEL: " + plan.wanted + " ble ikke funnet, spiller på reserveutgangen over\n";
       if (st != lastStatus) { atomicWrite(dataDir + "/status.txt", st.data(), st.size()); lastStatus = st; }
     }
     Request q;
@@ -462,7 +536,7 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
         blinkLeft = 10; lastSlot = q.a; slotChangedAt = t;
       } else if (q.type == Request::LedBlink) { blinkLeft = q.a * 2; }
       else if (q.type == Request::Log) {
-        const char* k = q.b == 2 ? "usb" : q.b == 1 ? "hdmi1" : "hdmi0";
+        const char* k = q.b == 3 ? "dacplus" : q.b == 2 ? "usb" : q.b == 1 ? "hdmi1" : "hdmi0";
         levelIdx[k] = q.a; slotChangedAt = t;   // lagres sammen med tilstand
       }
     }
@@ -472,6 +546,15 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
       atomicWrite(dataDir + "/state.txt", s.data(), s.size());
       slotChangedAt = -1;
     }
+    // Første minuttet: hvis vi spiller på en lavere prioritert utgang (f.eks. HDMI fordi DAC+-driveren
+    // kom sent), og en bedre dukker opp, bytt til den.
+    static double lastUpgradeCheck = 0; static std::vector<std::string> upgradeTried;
+    if (ready.audio && !ready.upgrade && t - startedAt < cfg.real("upgrade_window", 60.0) && t - lastUpgradeCheck > 2.0) {
+      lastUpgradeCheck = t;
+      std::string cur; { std::lock_guard<std::mutex> g(ready.m); cur = ready.kind; }
+      std::string best = pickKind(devs, listCards(), upgradeTried);
+      if (!best.empty() && kindRank(devs, best) < kindRank(devs, cur)) { logf("%s er nå tilgjengelig (spiller på %s)", best.c_str(), cur.c_str()); upgradeTried.push_back(best); ready.upgrade = true; }
+    }
     if (ledOk) {
       bool r = ready.audio.load();
       if (r && !wasReady) { blinkLeft = 6; logf("KLAR – spill!"); }
@@ -479,6 +562,8 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
       if (blinkLeft > 0 && t >= nextBlink) { led.set(blinkLeft % 2 == 0 ? false : true); blinkLeft--; nextBlink = t + 0.09; }
       else if (blinkLeft == 0 && t >= nextBlink) {
         if (!r) led.set(std::fmod(t, 1.0) < 0.5);                         // blinker sakte: venter på lyd
+        else if (ready.fallback) { double u = std::fmod(t, 3.0);              // to korte pauser hvert 3. s: reserveutgang
+          led.set(!((u < 0.15) || (u >= 0.3 && u < 0.45))); }
         else if (midi.connectedCount() == 0) led.set(std::fmod(t, 2.0) < 1.8); // kort pause: ingen MIDI-enhet
         else led.set(true);                                                // fast lys: klar
         nextBlink = t + 0.05;
@@ -499,7 +584,8 @@ static void usage() {
          "  ju6pi demo KATALOG [--oversample 2|4]                      render WAV-prøver\n"
          "  ju6pi bench                                                mål CPU-margin\n"
          "  ju6pi selftest [KATALOG]                                   test MPK-mapping, sysex m.m.\n"
-         "  ju6pi list                                                 vis patchlisten\n");
+         "  ju6pi list                                                 vis patchlisten\n"
+         "  ju6pi utganger [--config FIL] [--data KATALOG]             vis lydkort og hvilken utgang som velges\n");
 }
 
 int main(int argc, char** argv) {
@@ -519,6 +605,20 @@ int main(int argc, char** argv) {
   if (cmd == "selftest") return selftest(argc > 2 && argv[2][0] != '-' ? argv[2] : "");
   if (cmd == "bench") { for (int o : {2, 4}) printf("VCF-oversampling %dx: %.1fx sanntid (6 stemmer, én kjerne)\n", o, benchRT(o, 3.0)); return 0; }
   if (cmd == "list") { Bank b; b.loadFactory(); for (int i = 0; i < 128; i++) printf("%3d  %s\n", i, b.name[i].c_str()); return 0; }
+  if (cmd == "utganger" || cmd == "outputs") {
+    Config cfg; cfg.load(cfgPath); cfg.load(dataDir + "/ju6.conf");
+    auto cards = listCards(); OutputPlan p = planOutputs(cfg);
+    printf("Lydkort ALSA ser nå:\n");
+    for (auto& c : cards) printf("  %d  id=%-12s navn=%-22s driver=%s%s\n", c.index, c.id.c_str(), c.name.c_str(), c.driver.c_str(), isDacPlus(c) ? "   <- Raspberry Pi DAC+" : "");
+    if (cards.empty()) printf("  (ingen)\n");
+    if (!p.error.empty()) printf("advarsel: %s\n", p.error.c_str());
+    std::string k = pickKind(p.order, cards);
+    printf("Valg: %s\nVelger nå: %s%s\n", p.mode.c_str(), k.empty() ? "ingen (venter)" : k.c_str(),
+           !p.wanted.empty() && !k.empty() && k != p.wanted ? "  (RESERVE – ønsket utgang mangler)" : "");
+    if (!k.empty()) { OutputDevice d = resolveDevice(k); printf("ALSA-enhet: %s\n", d.pcm.c_str()); }
+    printf("HAT-EEPROM sier DAC: %s\n", hatSaysDac() ? "ja" : "nei");
+    return 0;
+  }
   if (cmd != "run") { usage(); return 1; }
   Config cfg; cfg.load(cfgPath);
   cfg.load(dataDir + "/ju6.conf");      // brukerens fil på data-partisjonen overstyrer
