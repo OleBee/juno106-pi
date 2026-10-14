@@ -9,6 +9,8 @@ HDMI-lydmottaker eller et **Raspberry Pi DAC+**-lydkort (fra 1.1.0), og slå på
 > tilhører sine eiere, og de brukes her bare til å beskrive hva synthen etterligner.
 > Det finnes ingen ROM-dumper eller samples i prosjektet: all lyd lages av DSP-kode i sanntid.
 
+> **Bruksanvisning (engelsk):** [JU-6 Pi Owner's Manual (PDF)](docs/JU-6_Pi_Owners_Manual.pdf) – panel, pads og knotter på MPK Mini Plus, patchvalg, lydutganger, oppskrifter på lyder og parameterliste.
+
 ---
 
 ## 1. Kort fortalt
