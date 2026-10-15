@@ -1,94 +1,61 @@
-# JU-6 Pi sticker sheet generator (A4, mm units, print at 100%)
+# JU-6 Pi sticker sheet v2 — understated, Juno-106 panel palette. Print A4 at 100 %.
 import cairosvg
-BG="#1b1b1b"; W="#f2f2f2"; G="#9a9a9a"; RED="#c8102e"; OR="#e8742a"; YE="#f2c230"; BL="#2f6db5"
+PANEL="#3b3d40"   # cool charcoal-grey panel
+W="#f4f4f2"       # white legends
+RED="#c62b2b"     # red "belt" + section graphics
+BLUE="#2a63b0"    # blue bank stripe / buttons
+ORANGE="#e07a22"  # orange buttons
+G="#a7a9ac"
 F='font-family="Nimbus Sans, Helvetica, Arial, sans-serif"'
-out=[]
-def cut(x,y,w,h,r=1.5): out.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" fill="none" stroke="#000" stroke-width="0.12" stroke-dasharray="1.2 0.8"/>')
-def panel(x,y,w,h,bleed=1.0):
-    out.append(f'<rect x="{x-bleed}" y="{y-bleed}" width="{w+2*bleed}" height="{h+2*bleed}" fill="{BG}"/>'); cut(x,y,w,h)
-def t(x,y,s,size,fill=W,anchor="start",bold=True,ls=0.3):
-    out.append(f'<text x="{x}" y="{y}" {F} font-size="{size}" font-weight="{"bold" if bold else "normal"}" fill="{fill}" text-anchor="{anchor}" letter-spacing="{ls}">{s}</text>')
-def stripes(x,y,w,h,cols=(RED,OR,YE,BL)):
-    sw=w/len(cols)
-    for i,c in enumerate(cols): out.append(f'<rect x="{x+i*sw}" y="{y}" width="{sw}" height="{h}" fill="{c}"/>')
-def line(x1,y1,x2,y2,c=W,w=0.25): out.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c}" stroke-width="{w}"/>')
-def logo(x,y,size):
-    t(x,y,"JU-6",size,ls=size*0.02); t(x+size*2.4,y,"Pi",size,fill=RED)
+o=[]
+def cut(x,y,w,h,r=1.2): o.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" fill="none" stroke="#000" stroke-width="0.12" stroke-dasharray="1.2 0.8"/>')
+def panel(x,y,w,h,b=1.0): o.append(f'<rect x="{x-b}" y="{y-b}" width="{w+2*b}" height="{h+2*b}" fill="{PANEL}"/>'); cut(x,y,w,h)
+def t(x,y,s,sz,fill=W,a="start",bold=True,ls=0.3,ital=False):
+    o.append(f'<text x="{x}" y="{y}" {F} font-size="{sz}" font-weight="{"bold" if bold else "normal"}" font-style="{"italic" if ital else "normal"}" fill="{fill}" text-anchor="{a}" letter-spacing="{ls}">{s}</text>')
+def bar(x,y,w,h,c): o.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{c}"/>')
+def logo(x,y,sz,a="start"): t(x,y,"JU-6 Pi",sz,a=a,ls=sz*0.06)
+def lab(x,y,s): t(x,y,s,1.9,fill="#777",bold=False,ls=0.2)
 
-# ---- 1. TOP LID 88 x 58
-x,y,w,h=12,22,88,58; panel(x,y,w,h)
-stripes(x,y+4,w,1.6); logo(x+6,y+19,11)
-t(x+6,y+25.5,"POLYPHONIC SYNTHESIZER",3.4,fill=G,ls=0.9)
-line(x+6,y+29,x+w-6,y+29,G,0.2)
-# slider-bank motif
-labs=[("LFO",RED),("DCO",OR),("VCF",YE),("VCA",BL),("ENV",W),("HPF",RED)]
-for i,(l,c) in enumerate(labs):
-    cx=x+10+i*13.6
-    line(cx,y+33,cx,y+47,"#555",0.9); out.append(f'<rect x="{cx-2.4}" y="{y+37+(i*3)%8}" width="4.8" height="2.6" rx="0.4" fill="{c}"/>')
-    t(cx,y+51.5,l,2.3,fill=W,anchor="middle",ls=0.2)
-t(x+w-6,y+55,"RASPBERRY PI 5 · DAC+",2.0,fill=G,anchor="end",bold=False,ls=0.4)
-t(x+6,y+55,"POLYPHONIC",2.0,fill=G,bold=False,ls=0.4)
-
-# ---- 2/3. LONG SIDE STRIPS 88 x 14 (x2)
-for k,yy in enumerate((88,106)):
-    panel(12,yy,88,14); stripes(12,yy+11,88,1.2); logo(16,yy+8.5,6.5)
-    t(96,yy+8.3,"POLYPHONIC SYNTHESIZER",2.6,fill=G,anchor="end",ls=0.6)
-
-# ---- 4/5. SHORT END STRIPS 58 x 14 (x2)
-for k,xx in enumerate((110,110)):
-    yy=22+k*18; panel(xx,yy,58,14); stripes(xx,yy+11,58,1.2); logo(xx+4,yy+8.5,6.5)
-    t(xx+54,yy+8.3,"JU-6 Pi" if False else ("ORIGINAL SOUND" if k==0 else "PROGRAMMABLE"),1.9,fill=G,anchor="end",ls=0.25)
-
-# ---- 6. PORT LABELS (white-on-black tabs with colour tick)
-ports=[("POWER",RED,16),("HDMI0 AUDIO",OR,24),("USB MIDI",BL,20),("LINE OUT",YE,20),("L",W,6),("R",RED,6),("HDMI1",G,14),("PHONES",YE,16)]
-px,py=110,62
-t(px,py-1.5,"PORT LABELS",2.4,fill="#000",ls=0.5)
-cx=px; cy=py
-for l,c,wd in ports:
-    if cx+wd>200: cx=px; cy+=10
-    panel(cx,cy,wd,7,bleed=0.6); out.append(f'<rect x="{cx}" y="{cy}" width="{wd}" height="1.1" fill="{c}"/>')
-    t(cx+wd/2,cy+5.4,l,2.6,anchor="middle",ls=0.25); cx+=wd+2.5
-# duplicate arrow tabs
-cy+=10; cx=px
-for l in ("▲ USB MIDI","▲ USB MIDI","POWER ▲","LINE OUT ▼"):
-    panel(cx,cy,21,7,bleed=0.6); t(cx+10.5,cy+5,l,2.4,anchor="middle"); cx+=23.5
-
-# ---- 7. EXTRAS
-ey=130
-t(12,ey-1.5,"EXTRAS",2.4,fill="#000",ls=0.5)
-panel(12,ey,88,9); secs=[("LFO",RED),("DCO",OR),("VCF",YE),("VCA",BL),("ENV",W),("CHORUS",RED)]
-for i,(l,c) in enumerate(secs):
-    sx=12+i*88/6; out.append(f'<rect x="{sx+1}" y="{ey+1}" width="{88/6-2}" height="1.2" fill="{c}"/>'); t(sx+88/12,ey+6.8,l,2.7,anchor="middle")
-    if i: line(sx,ey+2.5,sx,ey+8,G,0.2)
-panel(12,ey+13,88,9); t(16,ey+19.6,"CHORUS",3.2); 
-for i,(l,c) in enumerate((("I",OR),("II",YE),("I+II",BL))):
-    out.append(f'<rect x="{40+i*20}" y="{ey+15}" width="16" height="5" rx="0.6" fill="{c}"/>'); t(48+i*20,ey+19,l,3,fill="#111",anchor="middle")
-# small logo badges
+# 1 top lid 88x58
+x,y,w,h=12,24,88,58; lab(x,y-2,"1 · TOP LID 88×58"); panel(x,y,w,h)
+bar(x,y+8,w,0.8,RED)
+logo(x+7,y+36,10); t(x+7,y+42.5,"PROGRAMMABLE POLYPHONIC SYNTHESIZER",2.3,fill=G,bold=False,ls=0.55)
+bar(x+7,y+w*0+50,14,0.8,BLUE); bar(x+22,y+50,6,0.8,ORANGE)
+# 2,3 long sides 88x12
+for i,yy in enumerate((92,111)):
+    lab(12,yy-2,f"{2+i} · LONG SIDE 88×12"); panel(12,yy,88,12); bar(12,yy+2.2,88,0.5,RED)
+    logo(17,yy+8.9,5.2); t(95,yy+8.6,"POLYPHONIC SYNTHESIZER",1.9,fill=G,a="end",bold=False,ls=0.45)
+# 4,5 ends 58x12
+for i,yy in enumerate((24,43)):
+    lab(110,yy-2,f"{4+i} · END 58×12"); panel(110,yy,58,12); bar(110,yy+2.2,58,0.5,RED); logo(139,yy+8.9,5.2,a="middle")
+# 6 port labels
+lab(110,60,"6 · PORT LABELS")
+ports=[("POWER",15),("HDMI0 AUDIO",22),("HDMI1",13),("USB MIDI",17),("LINE OUT",17),("L",6),("R",6),("PHONES",15)]
+cx,cy=110,62
+for s,wd in ports:
+    if cx+wd>199: cx=110; cy+=9.5
+    panel(cx,cy,wd,6,b=0.6); t(cx+wd/2,cy+4.1,s,2.3,a="middle",ls=0.3); cx+=wd+2.5
+# 7 section headers (red graphic like the 106 section names)
+lab(110,cy+13.5,"7 · SECTION LABELS")
+cx=110; cy+=15.5
+for s in ("LFO","DCO","HPF","VCF","VCA","ENV","CHORUS"):
+    wd=8+len(s)*1.6
+    if cx+wd>199: cx=110; cy+=8
+    panel(cx,cy,wd,5,b=0.6); bar(cx,cy,wd,5,RED); t(cx+wd/2,cy+3.6,s,2.3,a="middle",ls=0.3); cx+=wd+2.5
+# 8 small badges
+lab(12,129,"8 · BADGES 30×10")
 for i in range(3):
-    bx=110+i*31; panel(bx,ey,28,12); stripes(bx,ey+9.6,28,1); logo(bx+3,ey+7.4,5.2)
-# round dots (slider-cap colours)
-for i,c in enumerate((RED,OR,YE,BL,W,RED,OR,YE,BL)):
-    cx_=114+i*9.5
-    out.append(f'<circle cx="{cx_}" cy="{ey+19}" r="3.6" fill="{c}"/><circle cx="{cx_}" cy="{ey+19}" r="3.6" fill="none" stroke="#000" stroke-width="0.12" stroke-dasharray="1.2 0.8"/>')
-# big banner sticker
-panel(12,ey+28,186,22); stripes(12,ey+28,186,2); logo(18,ey+44,13)
-t(194,ey+38.5,"POLYPHONIC SYNTHESIZER",4.2,fill=W,anchor="end",ls=1.0)
-t(194,ey+45,"RASPBERRY PI 5 · DAC+ · CHORUS I / II",2.6,fill=G,anchor="end",ls=0.5)
-
-# ---- header / footer
-t(12,12,"JU-6 Pi — STICKER SHEET",5,fill="#000"); 
-t(198,12,"A4 · PRINT AT 100% / ACTUAL SIZE · NO SCALING",2.6,fill="#000",anchor="end",bold=False)
-t(12,17,"Case: KKSB case for Raspberry Pi 5 + DAC+/DAC Pro. Measure your lid/sides before cutting — sizes are estimates (see README).",2.4,fill="#444",bold=False,ls=0)
-sy=270; out.append(f'<rect x="12" y="{sy}" width="50" height="3" fill="none" stroke="#000" stroke-width="0.25"/>')
-for i in range(6): line(12+i*10,sy,12+i*10,sy+(4.5 if i in (0,5) else 3.8),"#000",0.25)
-for i in range(5): out.append(f'<rect x="{12+i*10}" y="{sy}" width="5" height="3" fill="#000"/>')
-t(12,sy+8.5,"SCALE CHECK: this bar must measure exactly 50 mm",2.6,fill="#000",anchor="start",bold=False,ls=0)
-t(198,sy+3,"Dashed line = cut line (1 mm black bleed outside).",2.4,fill="#444",anchor="end",bold=False,ls=0)
-t(198,sy+7,"Glossy/matte vinyl sticker paper, laser or inkjet. Not affiliated with Roland.",2.4,fill="#444",anchor="end",bold=False,ls=0)
-t(12,90-70+0,"",1)
-labels=[(12,20,"1 · TOP LID 88×58"),(12,86.3,"2 · LONG SIDE 88×14"),(12,104.3,"3 · LONG SIDE 88×14"),(110,20,"4 · END 58×14"),(110,38.3,"5 · END 58×14")]
-for lx,ly,l in labels: t(lx,ly,l,1.9,fill="#666",bold=False,ls=0.2)
-svg=f'<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297"><rect width="210" height="297" fill="#fff"/>{"".join(out)}</svg>'
+    bx=12+i*33; panel(bx,131,30,10); logo(bx+15,131+6.8,4.6,a="middle")
+# header/footer
+t(12,12,"JU-6 Pi · STICKER SHEET",4.2,fill="#111",ls=0.3)
+t(198,12,"A4 · PRINT AT 100 % (ACTUAL SIZE)",2.4,fill="#111",a="end",bold=False)
+t(12,16.5,"For the KKSB case for Raspberry Pi 5 + DAC+/DAC Pro. Sizes are estimates; measure your case before cutting.",2.2,fill="#555",bold=False,ls=0)
+sy=272; o.append(f'<rect x="12" y="{sy}" width="50" height="2.5" fill="none" stroke="#000" stroke-width="0.25"/>')
+for i in range(5): bar(12+i*10,sy,5,2.5,"#000")
+t(12,sy+7,"Scale check: this bar must measure exactly 50 mm",2.3,fill="#111",bold=False,ls=0)
+t(198,sy+2.5,"Dashed line = cut line (1 mm bleed outside).",2.2,fill="#555",a="end",bold=False,ls=0)
+t(198,sy+6.5,"Not affiliated with Roland Corporation.",2.2,fill="#555",a="end",bold=False,ls=0)
+svg=f'<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297"><rect width="210" height="297" fill="#fff"/>{"".join(o)}</svg>'
 open("JU-6_Pi_Stickers_A4.svg","w").write(svg)
 cairosvg.svg2pdf(bytestring=svg.encode(),write_to="JU-6_Pi_Stickers_A4.pdf")
 cairosvg.svg2png(bytestring=svg.encode(),write_to="JU-6_Pi_Stickers_preview.png",output_width=1654)
