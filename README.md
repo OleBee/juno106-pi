@@ -13,6 +13,22 @@ HDMI-lydmottaker eller et **Raspberry Pi DAC+**-lydkort (fra 1.1.0), og slå på
 
 ---
 
+## Hardware requirements
+
+Measured and estimated figures for running JU-6 Pi. Values marked **estimate** have not been measured end-to-end on every board listed.
+
+| Item | Requirement |
+|---|---|
+| **Board** | **Raspberry Pi 5** recommended. Raspberry Pi 4 works for JU-6 at 2× VCF oversampling (4× is tight). Raspberry Pi Zero 2 W is **not supported**. |
+| **RAM** | Synth process RSS ≈ **11 MB** (measured). With Raspberry Pi OS Lite, total system use is roughly **150–200 MB** (**estimate**). **1 GB** is the minimum on a Pi 5; **2 GB** is comfortable. More RAM (4 GB / 8 GB) is fine but unused by the synth. |
+| **CPU** | The limiter is CPU, not RAM. Pi 5 handles both **2×** and **4×** oversampling. Pi 4: JU-6 at **2×** OK; **4×** tight. A Jupiter-8-class build at 2× on Pi 4 is **untested**. |
+| **microSD** | **8 GB** minimum. **16–32 GB** A1/A2 (U1/U3) recommended — e.g. SanDisk Extreme or Samsung EVO. The released image is about **3.7 GB** uncompressed. A faster card mainly shortens boot; audio quality is unchanged. |
+| **Audio out** | **HDMI0** (port nearest USB-C), or **Raspberry Pi DAC+** on the 40-pin header. **HiFiBerry DAC+** is recognized in software but needs `dtoverlay=hifiberry-dacplus` in `config.txt` (not hardware-tested). |
+| **Controller** | **AKAI MPK Mini Plus** over USB (other USB-MIDI devices also auto-connect). |
+| **Power** | Official **5 V / 5 A** USB-C supply for Pi 5 (27 W). |
+
+---
+
 ## 1. Kort fortalt
 
 1. Last ned `ju6pi-1.1.1.img.xz` fra [Releases](../../releases). Er den delt i
