@@ -46,6 +46,9 @@ inline std::vector<CardInfo> listCards() {
 inline bool isDacPlus(const CardInfo& c) {
   if (c.id == "RPiDAC" || c.id == "IQaudIODAC") return true;
   if (c.name == "RPi DAC+" || c.name == "IQaudIODAC") return true;
+  // HiFiBerry DAC+ (snd_rpi_hifiberry_dacplus): id «sndrpihifiberry», navn med «HiFiBerry»/«hifiberry»
+  auto has = [](const std::string& s, const char* n) { return s.find(n) != std::string::npos; };
+  if (has(c.id, "hifiberry") || has(c.name, "hifiberry") || has(c.name, "HiFiBerry") || has(c.driver, "hifiberry")) return true;
   return false;
 }
 

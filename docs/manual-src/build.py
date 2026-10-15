@@ -20,7 +20,7 @@ def sect(num, title):
     return f'<h1><span class="num">{num}</span>{title}</h1>'
 
 def note(kind, text):
-    return f'<div class="note {kind}"><b>{ {"note":"NOTE","warn":"CAUTION","issue":"KNOWN ISSUE (v1.1.0)","unv":"NOT VERIFIED"}[kind] }</b> {text}</div>'
+    return f'<div class="note {kind}"><b>{ {"note":"NOTE","warn":"CAUTION","issue":"KNOWN ISSUE","unv":"NOT VERIFIED"}[kind] }</b> {text}</div>'
 
 def val10(v):  # 0..127 -> 0..10 scale for orientation
     return f"{v*10/127:.1f}"
@@ -73,7 +73,7 @@ H.append(f'''<section class="cover">
 <div class="sub">6-VOICE POLYPHONIC SYNTHESIZER · RASPBERRY PI 5</div>
 <div class="om">OWNER'S MANUAL</div>
 <div class="cover-fig">{mpk_top(False)}</div>
-<div class="cover-foot">Software version 1.1.0 · Played from an AKAI MPK mini Plus over USB · Audio via HDMI or Raspberry Pi DAC+<br>
+<div class="cover-foot">Software version 1.1.1 · Played from an AKAI MPK mini Plus over USB · Audio via HDMI or Raspberry Pi DAC+<br>
 JU-6 Pi is an independent hobby project inspired by the Juno-106. It is not affiliated with or endorsed by Roland Corporation.</div>
 </section>''')
 
@@ -85,7 +85,7 @@ toc = [("1", "Introduction"), ("2", "Important Notes"), ("3", "Panel Description
        ("15", "Patch List"), ("16", "Troubleshooting"), ("17", "Specifications"), ("18", "Sources and Credits")]
 H.append('<section class="page"><h1 class="plain">Contents</h1><ol class="toc">' +
          "".join(f'<li><a href="#s{n}"><span>{n}</span>{t}</a></li>' for n, t in toc) + '</ol>'
-         + note("note", "Everything in this manual about controls, MIDI numbers, patch memory, audio outputs and latency was taken from the JU-6 Pi v1.1.0 source code and README (repository <code>OleBee/juno106-pi</code>, commit <code>ffbce82</code>). Items that could not be confirmed are marked <b>NOT VERIFIED</b>.")
+         + note("note", "Everything in this manual about controls, MIDI numbers, patch memory, audio outputs and latency was taken from the JU-6 Pi v1.1.1 source code and README (repository <code>OleBee/juno106-pi</code>). Items that could not be confirmed are marked <b>NOT VERIFIED</b>.")
          + '</section>')
 
 # ---------------- 1 INTRODUCTION ----------------
@@ -133,7 +133,7 @@ H.append(f'''<section class="page" id="s2">{sect(2, "Important Notes")}
 </ul>
 <h2>What is not on board</h2>
 <p>For a clean, fast boot the image has Wi-Fi, Bluetooth, SSH, NetworkManager, cloud-init, avahi, cron, apt timers and swap switched off. The system log is kept in RAM only. All configuration is done by editing a text file on the SD card (see section 12).</p>
-{note("warn", "This manual describes software version <b>1.1.0</b>. The audio-output selection (<code>audio_output</code>) and DAC+ support do not exist in 1.0.0.")}
+{note("warn", "This manual describes software version <b>1.1.1</b>. The audio-output selection (<code>audio_output</code>) and DAC+ support do not exist in 1.0.0. Since 1.1.1, holding a pad writes your edited sound.")}
 </section>''')
 
 # ---------------- 3 PANEL DESCRIPTIONS ----------------
@@ -172,7 +172,7 @@ H.append(f'''<section class="page">
 </table>
 <h2>Raspberry Pi DAC+ (optional)</h2>
 <p>The <b>Raspberry Pi DAC+</b> (formerly IQaudIO DAC+) is a sound card that sits on the GPIO pins. It has a TI PCM5122 converter, two RCA line outputs (0–2 V RMS) and a 3.5 mm headphone output carrying the same stereo signal. It has no input. Older black IQaudIO DAC+ boards work with the same overlay.</p>
-{note("unv", "<b>HiFiBerry DAC+ is not supported in v1.1.0.</b> JU-6 Pi 1.1.0 loads only the <code>rpi-dacplus</code> overlay and recognises only the ALSA cards <code>RPiDAC</code> / <code>IQaudIODAC</code> (<code>src/audio_out.h</code>, <code>image/boot/dacplus.blokk</code>). A HiFiBerry DAC+ uses a different overlay and card name and is <b>not</b> detected by this version; JU-6 Pi would then play on HDMI instead. This manual therefore describes the Raspberry Pi DAC+.")}
+{note("note", "<b>HiFiBerry DAC+:</b> from v1.1.1 the ALSA card of a HiFiBerry DAC+ (<code>snd_rpi_hifiberry_dacplus</code>) is recognised as a DAC+ output. The image still loads only the <code>rpi-dacplus</code> overlay, so for a HiFiBerry board change the line <code>dtoverlay=rpi-dacplus</code> in <code>config.txt</code> on the boot partition to <code>dtoverlay=hifiberry-dacplus</code>. NOT VERIFIED on hardware. This manual describes the Raspberry Pi DAC+.")}
 </section>''')
 
 # ---------------- 4 CONNECTIONS ----------------
@@ -180,7 +180,7 @@ H.append(f'''<section class="page" id="s4">{sect(4, "Connections")}
 {note("warn", "To prevent damage, turn the volume of your amplifier or TV all the way down and leave the Pi unpowered while making connections.")}
 <h2>Preparing the SD card</h2>
 <ol class="steps">
-<li>Download <code>ju6pi-1.1.0.img.xz</code> from the project's Releases page. If it is split into <code>.part-aa</code>, <code>.part-ab</code> … join the parts first (<code>cat ju6pi-1.1.0.img.xz.part-* &gt; ju6pi-1.1.0.img.xz</code>) and check it with <code>sha256sum -c ju6pi-1.1.0.img.xz.sha256</code>.</li>
+<li>Download <code>ju6pi-1.1.1.img.xz</code> from the project's Releases page. If it is split into <code>.part-aa</code>, <code>.part-ab</code> … join the parts first (<code>cat ju6pi-1.1.1.img.xz.part-* &gt; ju6pi-1.1.1.img.xz</code>) and check it with <code>sha256sum -c ju6pi-1.1.1.img.xz.sha256</code>.</li>
 <li>Write it to a microSD card (8 GB or more). <b>Raspberry Pi Imager:</b> Choose Device → Raspberry Pi 5; Choose OS → Use Custom → the .img.xz file; Choose Storage → the card. When asked about OS customisation, answer <b>No</b>. <b>balenaEtcher:</b> Flash from file → Select target → Flash!</li>
 <li>Insert the card into the Pi.</li>
 </ol>
@@ -358,13 +358,14 @@ H.append(f'''<section class="page">
 
 # ---------------- 10 WRITING ----------------
 H.append(f'''<section class="page" id="s10">{sect(10, "Writing (Saving) Patches")}
-<p>As implemented in v1.1.0, the write procedure is:</p>
+<p>As implemented in v1.1.1, the write procedure is:</p>
 <ol class="steps">
+<li>Edit the sound with the knobs until you like it.</li>
 <li>Select the target group with GROUP −/+ (bank B, pads 5/6).</li>
 <li>Switch the pads to bank A and <b>hold</b> the pad of the target patch number for <b>1.5 seconds</b> (<code>save_hold_seconds</code>).</li>
 <li>The LED blinks rapidly to confirm. The memory is written to <code>ju6/patches.syx</code> and named "<i>A15 Egen</i>" ("Egen" = user) in <code>ju6/names.txt</code>.</li>
 </ol>
-{note("issue", "Reading <code>src/controller.h</code> shows that pressing a bank-A pad <b>first recalls the patch stored on that pad</b> (<code>selectSlot()</code> on note-on), and the save 1.5 s later captures the sound <i>as it is then</i>. Edits made before pressing the pad are therefore replaced by the stored patch and are <b>not</b> written; only knob changes made while the pad is held (within the 1.5 s) end up in memory. The built-in self-test checks only that the save happens to the right slot, not that edits are kept. Until this is fixed in the software, do not rely on the write function to keep a sound you have edited — write the knob values down (the tutorial pages can be used as patch sheets).")}
+{note("note", "<b>Fixed in v1.1.1.</b> A bank-A pad now recalls its patch on <i>release</i> of a short press, not when it is pressed. Holding the pad therefore writes the sound exactly as you have edited it, and releasing after the write does not reload anything. In v1.1.0 the stored patch was recalled on press, so edits were lost; update the SD card to v1.1.1.")}
 <h2>Patch files on the JU6DATA partition</h2>
 <table class="grid small">
 <tr><th>File</th><th>Contents</th></tr>
@@ -544,7 +545,7 @@ H.append(f'''<section class="page" id="s16">{sect(16, "Troubleshooting")}
 <tr><td>Clicks or drop-outs</td><td>The buffer grows automatically after repeated underruns; you can also set <code>buffer = 512x2</code>.</td></tr>
 <tr><td>Everything sounds transposed</td><td>TRANSPOSE active: short-press pad 8 (bank B), or set page 4, K4 to the centre.</td></tr>
 <tr><td>Notes hang</td><td>Press HOLD (bank B, pad 7) to release, or check the sustain pedal.</td></tr>
-<tr><td>An edited sound was not kept after writing</td><td>Known issue in v1.1.0 (section 10).</td></tr>
+<tr><td>An edited sound was not kept after writing</td><td>Fixed in v1.1.1 (section 10); update the SD card.</td></tr>
 <tr><td>Want factory sounds back</td><td>Delete <code>patches.syx</code> and <code>names.txt</code> on JU6DATA.</td></tr>
 </table>
 <h2>With a screen and keyboard on the Pi</h2>
@@ -569,11 +570,11 @@ specs = [("Sound engine", "Ultramaster KR-106 DSP (component-level Juno-106 mode
 ("Start-up time", "≈ 10–15 s to ready tones"),
 ("Hardware", "Raspberry Pi 5, 8 GB; microSD ≥ 8 GB; 27 W USB-C supply recommended"),
 ("Operating system", "Raspberry Pi OS Lite arm64 (Debian 13 “trixie”), read-only root (overlayroot)"),
-("Software", "ju6pi 1.1.0 (9 October 2026), C++17, ALSA; SCHED_FIFO 80 on isolated CPU 3"),
+("Software", "ju6pi 1.1.1 (15 October 2026), C++17, ALSA; SCHED_FIFO 80 on isolated CPU 3"),
 ("Licence", "GPL-3.0")]
 H.append(f'''<section class="page" id="s17">{sect(17, "Specifications")}
 <table class="grid spec">{"".join(f"<tr><th>{a}</th><td>{b_}</td></tr>" for a, b_ in specs)}</table>
-<p class="cap">Specifications are taken from the v1.1.0 source and README and are subject to change.</p>
+<p class="cap">Specifications are taken from the v1.1.1 source and README and are subject to change.</p>
 {note("note", "Chorus II and I+II speeds have not yet been verified against hardware by the KR-106 project; the chorus circuit is modelled on the Juno-6/60 family, which shares its topology with the 106. Analogue voice-to-voice variation is only approximated.")}
 </section>''')
 
@@ -581,7 +582,7 @@ H.append(f'''<section class="page" id="s17">{sect(17, "Specifications")}
 H.append(f'''<section class="page" id="s18">{sect(18, "Sources and Credits")}
 <h2>What this manual is based on</h2>
 <table class="grid small">
-<tr><th>Topic</th><th>Source (repository OleBee/juno106-pi, v1.1.0, commit ffbce82)</th></tr>
+<tr><th>Topic</th><th>Source (repository OleBee/juno106-pi, v1.1.1)</th></tr>
 <tr><td>Knob pages, pad functions, CC/notes, write, transpose, Program Change</td><td><code>src/controller.h</code></td></tr>
 <tr><td>Parameter scaling, patch format, MOD/bender, transpose key</td><td><code>src/synth.h</code>, <code>third_party/kr106/DSP/KR106SysEx.h</code>, <code>KR106_DSP_SetParam.h</code>, <code>KR106_HPF.h</code>, <code>KR106LFO.h</code></td></tr>
 <tr><td>Defaults, LED, ready tones, status file, oversampling, buffer step-up</td><td><code>src/main.cpp</code>, <code>image/data/ju6.conf</code></td></tr>
@@ -598,7 +599,7 @@ H.append(f'''<section class="page" id="s18">{sect(18, "Sources and Credits")}
 <li>The layout of this manual is inspired by 1980s synthesizer owner's manuals; no text has been copied.</li>
 <li>JU-6 Pi is not affiliated with Roland Corporation. "Roland" and "Juno" are trademarks of their owners.</li>
 </ul>
-<div class="endmark"><div class="stripes small"><i></i><i></i><i></i></div>JU-6 Pi · Owner's Manual · v1.1.0 · October 2026</div>
+<div class="endmark"><div class="stripes small"><i></i><i></i><i></i></div>JU-6 Pi · Owner's Manual · v1.1.1 · October 2026</div>
 </section>''')
 
 doc = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><title>JU-6 Pi Owner's Manual</title><style>{css}</style></head><body>{"".join(H)}</body></html>'''

@@ -15,7 +15,7 @@ HDMI-lydmottaker eller et **Raspberry Pi DAC+**-lydkort (fra 1.1.0), og slå på
 
 ## 1. Kort fortalt
 
-1. Last ned `ju6pi-1.1.0.img.xz` fra [Releases](../../releases). Er den delt i
+1. Last ned `ju6pi-1.1.1.img.xz` fra [Releases](../../releases). Er den delt i
    `.part-aa`, `.part-ab` …, slår du delene sammen først (se punkt 2).
 2. Skriv imaget til et microSD-kort (minst 8 GB) med **Raspberry Pi Imager** eller **balenaEtcher**.
 3. Koble til:
@@ -39,16 +39,16 @@ HDMI-lydmottaker eller et **Raspberry Pi DAC+**-lydkort (fra 1.1.0), og slå på
 ## 2. Skrive SD-kortet
 
 **Raspberry Pi Imager:** *Choose Device* → Raspberry Pi 5. *Choose OS* → *Use Custom* → velg
-`ju6pi-1.1.0.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
+`ju6pi-1.1.1.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
 OS-tilpasning, svarer du **Nei / No**. Imaget er ferdig konfigurert, og tilpasningen blir ikke brukt.
 
-**balenaEtcher:** *Flash from file* → `ju6pi-1.1.0.img.xz` → *Select target* → *Flash!*
+**balenaEtcher:** *Flash from file* → `ju6pi-1.1.1.img.xz` → *Select target* → *Flash!*
 
 **Hvis filen er delt opp** (GitHub tillater maks 2 GB per fil):
 ```sh
-cat ju6pi-1.1.0.img.xz.part-* > ju6pi-1.1.0.img.xz     # Linux/macOS
-copy /b ju6pi-1.1.0.img.xz.part-aa + ju6pi-1.1.0.img.xz.part-ab ju6pi-1.1.0.img.xz   # Windows
-sha256sum -c ju6pi-1.1.0.img.xz.sha256
+cat ju6pi-1.1.1.img.xz.part-* > ju6pi-1.1.1.img.xz     # Linux/macOS
+copy /b ju6pi-1.1.1.img.xz.part-aa + ju6pi-1.1.1.img.xz.part-ab ju6pi-1.1.1.img.xz   # Windows
+sha256sum -c ju6pi-1.1.1.img.xz.sha256
 ```
 
 ## 3. Lydmotoren
@@ -358,6 +358,13 @@ Kommandoer på Pi-en (krever skjerm og tastatur, eller å montere SD-kortet):
 `journalctl -u ju6pi` (logg).
 
 ## 9. Endringer
+
+**1.1.1 (15. oktober 2026)**
+- Retting: å holde en pad i bank A lagrer nå lyden slik du har skrudd den. Før ble patchen på padden lastet
+  allerede ved trykk, så endringene forsvant. Nå lastes patchen ved slipp etter et kort trykk, og et langt trykk lagrer.
+- HiFiBerry DAC+ (`snd_rpi_hifiberry_dacplus`) gjenkjennes som DAC+-utgang. Imaget laster fortsatt bare `rpi-dacplus`;
+  bytt til `dtoverlay=hifiberry-dacplus` i `config.txt` for et HiFiBerry-kort (ikke testet på maskinvare).
+- Selvtesten dekker lagring etter redigering og HiFiBerry-gjenkjenning.
 
 **1.1.0 (9. oktober 2026)**
 - Støtte for Raspberry Pi DAC+ (PCM5122, RCA og hodetelefon). Overlayet `rpi-dacplus` lastes alltid, og

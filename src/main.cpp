@@ -11,7 +11,7 @@
 #include <thread>
 #include <mutex>
 #ifndef JU6_VERSION
-#define JU6_VERSION "1.1.0"
+#define JU6_VERSION "1.1.1"
 #endif
 #include <pthread.h>
 #include <sched.h>
@@ -164,6 +164,26 @@ static int selftest(const std::string& wavDir) {
   // Pad A3 (note 38, kanal 10) -> patch A13
   ctl.handle(ev(MidiEvent::NoteOn, 9, 38, 100), t); ctl.handle(ev(MidiEvent::NoteOff, 9, 38, 0), t + 0.1);
   check(ctl.currentSlot() == 2, "pad 3 (bank A) velger patch A13");
+  // Lagre etter redigering (1.1.1): hold pad A4 -> den REDIGERTE lyden lagres, ikke den gamle
+  {
+    Bank b2; b2.loadFactory(); Synth y; y.init(48000, 1024, 2); RequestQueue q2; Controller c3(y, b2, q2, cc);
+    c3.selectSlot(0, false);
+    Synth tmp; tmp.init(48000, 1024, 2); tmp.loadPatch(b2.patch[3]); const float before = tmp.get(kVcfFreq);
+    const int v = before > 0.5f ? 10 : 117; const float want = v / 127.f;
+    c3.handle(ev(MidiEvent::CC, 0, 70, v), 10.0);
+    check(std::fabs(y.get(kVcfFreq) - want) < 1e-3, "lagretest: knott endrer VCF FREQ");
+    c3.handle(ev(MidiEvent::NoteOn, 9, 39, 100), 10.0);
+    check(std::fabs(y.get(kVcfFreq) - want) < 1e-3, "trykk på pad laster ikke patch (redigering beholdes)");
+    c3.tick(10.5); c3.handle(ev(MidiEvent::CC, 0, 70, v), 10.6); c3.tick(11.6);
+    c3.handle(ev(MidiEvent::NoteOff, 9, 39, 0), 11.7);
+    tmp.loadPatch(b2.patch[3]);
+    check(c3.currentSlot() == 3 && std::fabs(tmp.get(kVcfFreq) - want) < 0.02, "hold pad A4: redigert lyd lagret i A14");
+    check(std::fabs(y.get(kVcfFreq) - want) < 1e-3, "slipp etter lagring laster ikke på nytt");
+    c3.handle(ev(MidiEvent::NoteOn, 9, 36, 100), 12.0); c3.handle(ev(MidiEvent::NoteOff, 9, 36, 0), 12.1);
+    check(c3.currentSlot() == 0, "kort trykk pad A1 laster A11");
+    c3.handle(ev(MidiEvent::NoteOn, 9, 39, 100), 13.0); c3.handle(ev(MidiEvent::NoteOff, 9, 39, 0), 13.2);
+    check(c3.currentSlot() == 3 && std::fabs(y.get(kVcfFreq) - want) < 0.02, "A14 lastet igjen har den lagrede redigeringen");
+  }
   // Gruppe + (pad B6, note 49) -> A23
   ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t); ctl.handle(ev(MidiEvent::NoteOff, 9, 49, 0), t);
   check(ctl.currentSlot() == 10, "pad B6 (gruppe +) gir A23");
@@ -307,6 +327,8 @@ static int selftest(const std::string& wavDir) {
     check(pickKind(pb.order, {h0, h1, dac}) == "dacplus", "audio_output går foran audio_devices");
     auto px = planOutputs(cfgOf({{"audio_output", "tull"}}));
     check(!px.error.empty() && pickKind(px.order, {h0, dac}) == "dacplus", "ukjent verdi -> auto + advarsel");
+    { const CardInfo hb{2, "sndrpihifiberry", "snd_rpi_hifiberry_dacplus", "snd_rpi_hifiberry_dacplus"};
+      check(isDacPlus(hb) && pickKind(pa.order, {h0, h1, hb}) == "dacplus", "auto: HiFiBerry DAC+ gjenkjennes"); }
     check(!isDacPlus(mpk) && !isDacPlus(h0) && isDacPlus(dac) && isDacPlus(iq), "DAC+ matches på id/navn, ikke andre kort");
     check(kindRank(pa.order, "dacplus") < kindRank(pa.order, "hdmi0"), "DAC+ rangeres over HDMI0 (bytte ved sen oppstart)");
     check(pickKind(pa.order, {h0, dac}, {"dacplus"}) == "hdmi0", "bytte prøves bare én gang per utgang");

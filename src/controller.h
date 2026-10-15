@@ -127,6 +127,7 @@ public:
         mB.patch[slot] = r.patch;
         mSlot = slot; mNumber = i;
         mRq.push(r);
+        { Request c{}; c.type = Request::CurrentSlot; c.a = slot; mRq.push(c); }
       }
     }
   }
@@ -145,8 +146,13 @@ private:
 
   void padEvent(int pad, bool down, double t) {
     if (pad < 8) {                                   // Pad-bank A: patchnummer 1–8
-      if (down) { mPadDown[pad] = t; mSaved[pad] = false; selectSlot((mBankB ? 64 : 0) + mGroup * 8 + pad); }
-      else mPadDown[pad] = -1.0;
+      // Trykk: ingenting lastes ennå, så lydene du har skrudd fram beholdes.
+      // Kort slipp: last patchen. Hold (saveHoldSec): lagre DEN NÅVÆRENDE lyden.
+      if (down) { mPadDown[pad] = t; mSaved[pad] = false; }
+      else {
+        if (mPadDown[pad] >= 0 && !mSaved[pad]) selectSlot((mBankB ? 64 : 0) + mGroup * 8 + pad);
+        mPadDown[pad] = -1.0;
+      }
       return;
     }
     int f = pad - 8;                                 // Pad-bank B: funksjoner
