@@ -1,4 +1,5 @@
 #include "midi_in.h"
+#include "midi_echo.h"
 #include <alsa/asoundlib.h>
 #include <poll.h>
 #include <pthread.h>
@@ -97,9 +98,11 @@ void MidiIn::run() {
         bool send = true;
         switch (ev->type) {
           case SND_SEQ_EVENT_NOTEON:
+            if (mEcho && mEcho->drop(ev->data.note.note)) { send = false; break; }
             m.type = ev->data.note.velocity ? MidiEvent::NoteOn : MidiEvent::NoteOff;
             m.ch = ev->data.note.channel; m.d1 = ev->data.note.note; m.d2 = ev->data.note.velocity; break;
           case SND_SEQ_EVENT_NOTEOFF:
+            if (mEcho && mEcho->drop(ev->data.note.note)) { send = false; break; }
             m.type = MidiEvent::NoteOff; m.ch = ev->data.note.channel; m.d1 = ev->data.note.note; break;
           case SND_SEQ_EVENT_CONTROLLER:
             m.type = MidiEvent::CC; m.ch = ev->data.control.channel;

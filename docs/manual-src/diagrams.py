@@ -135,28 +135,36 @@ def mpk_top(callouts=True):
         b += leader(bx + 62, ry + 10, bx + 68, ry - 14) + callout(bx + 68, ry - 14, 10, fill=RED)
     return svg(W, H + 10, b, "fig")
 
+def _pad_grid(x0, title, labels, sub, color, y_title=22):
+    s = f'<text x="{x0}" y="{y_title}" font-size="14" font-weight="bold" fill="{INK}">{title}</text>'
+    s += f'<text x="{x0}" y="{y_title+15}" font-size="9" fill="{GREY}">{sub}</text>'
+    for row in range(2):
+        for col in range(4):
+            n = (5 + col) if row == 0 else (1 + col)
+            x = x0 + col * 102; y = y_title + 26 + row * 100
+            s += f'<rect x="{x}" y="{y}" width="96" height="90" rx="8" fill="{color}" stroke="{INK}" stroke-width="1.5"/>'
+            s += f'<text x="{x+8}" y="{y+14}" font-size="8" fill="#fff" opacity="0.85">PAD {n}</text>'
+            l1, l2 = labels[n - 1]
+            s += f'<text x="{x+48}" y="{y+48}" font-size="{13 if len(l1) < 10 else 11}" font-weight="bold" fill="#fff" text-anchor="middle">{l1}</text>'
+            s += f'<text x="{x+48}" y="{y+64}" font-size="8.5" fill="#fff" text-anchor="middle">{l2}</text>'
+    return s
+
 def pad_map():
-    W, H = 900, 300
-    b = ""
-    def grid(x0, title, labels, sub, color):
-        s = f'<text x="{x0}" y="22" font-size="15" font-weight="bold" fill="{INK}">{title}</text>'
-        s += f'<text x="{x0}" y="38" font-size="10" fill="{GREY}">{sub}</text>'
-        for row in range(2):
-            for col in range(4):
-                n = (5 + col) if row == 0 else (1 + col)
-                x = x0 + col * 102; y = 52 + row * 112
-                s += f'<rect x="{x}" y="{y}" width="94" height="100" rx="8" fill="{color}" stroke="{INK}" stroke-width="1.5"/>'
-                s += f'<text x="{x+8}" y="{y+16}" font-size="9" fill="#fff" opacity="0.8">PAD {n}</text>'
-                l1, l2 = labels[n - 1]
-                s += f'<text x="{x+47}" y="{y+56}" font-size="{15 if len(l1) < 9 else 12.5}" font-weight="bold" fill="#fff" text-anchor="middle">{l1}</text>'
-                s += f'<text x="{x+47}" y="{y+74}" font-size="9" fill="#fff" text-anchor="middle">{l2}</text>'
-        return s
-    A = [(f"x{i}", f"patch number {i}") for i in range(1, 9)]
-    B = [("PAGE 1", "SOUND"), ("PAGE 2", "DCO"), ("PAGE 3", "MOD/HPF/VCA"), ("PAGE 4", "PLAY"),
-         ("GROUP −", "previous group"), ("GROUP +", "next group"), ("HOLD", "on / off"), ("TRANSPOSE", "hold + key")]
-    b += grid(10, "PAD BANK A", A, "notes 36–43 on ch. 10 · hold 1.5 s = WRITE", "#4a4a4a")
-    b += grid(470, "PAD BANK B", B, "notes 44–51 on ch. 10 · function pads", RED)
-    return svg(W, H, b, "fig")
+    """Bank A (patches) beside a reminder that bank B is the two-page panel."""
+    A = [(f"x{i}", "short = recall") for i in range(1, 9)]
+    b = _pad_grid(10, "PAD BANK A  ·  patches", A, "notes 36–43 on ch. 10 · hold 1.5 s = WRITE", "#4a4a4a")
+    b += f'<text x="470" y="40" font-size="14" font-weight="bold" fill="{INK}">PAD BANK B</text>'
+    b += f'<text x="470" y="62" font-size="11" fill="{INK}">The two panel sides (section 3).</text>'
+    b += f'<text x="470" y="82" font-size="11" fill="{INK}">Pad 6 selects SIDE 1. Pad 2 selects SIDE 2.</text>'
+    b += f'<text x="470" y="102" font-size="11" fill="{INK}">The active side’s pad stays lit;</text>'
+    b += f'<text x="470" y="118" font-size="11" fill="{INK}">the other page pad stays off.</text>'
+    b += f'<text x="470" y="146" font-size="11" fill="{GREY}">Notes 44–51 on channel 10.</text>'
+    b += f'<text x="470" y="164" font-size="11" fill="{GREY}">Pads 1–4 are the lower row.</text>'
+    return svg(900, 250, b, "fig")
+
+def side_pads(title, labels, sub):
+    b = _pad_grid(8, title, labels, sub, RED)
+    return svg(430, 250, b, "kp")
 
 def knob_page(title, names, values=None, subs=None):
     """One knob page laid out like the MPK's 2×4 knob block."""
@@ -186,7 +194,7 @@ def pi5_connections(dac=False):
     x, y, w, h = 300, 120, 300, 200
     b += f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="#1f6f43" stroke="{INK}" stroke-width="2"/>'
     b += f'<text x="{x+w/2}" y="{y+h/2-6}" font-size="16" font-weight="bold" fill="#fff" text-anchor="middle">Raspberry Pi 5</text>'
-    b += f'<text x="{x+w/2}" y="{y+h/2+12}" font-size="10" fill="#e6f2ea" text-anchor="middle">8 GB · JU-6 Pi v1.1.0 microSD</text>'
+    b += f'<text x="{x+w/2}" y="{y+h/2+12}" font-size="10" fill="#e6f2ea" text-anchor="middle">8 GB · JU-6 Pi v1.2.0 microSD</text>'
     # GPIO header along top edge
     b += f'<rect x="{x+40}" y="{y+8}" width="200" height="16" fill="#111"/>'
     for i in range(20):

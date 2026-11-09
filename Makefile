@@ -3,7 +3,7 @@ CXX      ?= g++
 CXXFLAGS ?= -O3 -ffast-math -fno-finite-math-only
 CXXFLAGS += -std=c++17 -Wall -Wno-unused-variable -Wno-unused-but-set-variable -pthread
 LDLIBS   += -lasound -pthread
-SRC = src/main.cpp src/midi_in.cpp
+SRC = src/main.cpp src/midi_in.cpp src/midi_out.cpp
 HDR = $(wildcard src/*.h third_party/kr106/DSP/*.h)
 
 all: build/ju6pi

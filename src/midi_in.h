@@ -1,5 +1,6 @@
 #pragma once
 #include "util.h"
+#include "midi_echo.h"
 #include <thread>
 
 namespace ju6 {
@@ -10,12 +11,14 @@ public:
   using Queue = SpscQueue<MidiEvent, 1024>;
   explicit MidiIn(Queue& q) : mQ(q) {}
   ~MidiIn() { stop(); }
+  void setEcho(LedEcho* e) { mEcho = e; }
   void start();
   void stop();
   int connectedCount() const { return mConnected.load(); }
 private:
   void run();
   Queue& mQ;
+  LedEcho* mEcho = nullptr;
   std::thread mThread;
   std::atomic<bool> mRun{false};
   std::atomic<int> mConnected{0};

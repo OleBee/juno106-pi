@@ -31,7 +31,7 @@ Measured and estimated figures for running JU-6 Pi. Values marked **estimate** h
 
 ## 1. Kort fortalt
 
-1. Last ned `ju6pi-1.1.1.img.xz` fra [Releases](../../releases). Er den delt i
+1. Last ned `ju6pi-1.2.0.img.xz` fra [Releases](../../releases). Er den delt i
    `.part-aa`, `.part-ab` …, slår du delene sammen først (se punkt 2).
 2. Skriv imaget til et microSD-kort (minst 8 GB) med **Raspberry Pi Imager** eller **balenaEtcher**.
 3. Koble til:
@@ -55,16 +55,16 @@ Measured and estimated figures for running JU-6 Pi. Values marked **estimate** h
 ## 2. Skrive SD-kortet
 
 **Raspberry Pi Imager:** *Choose Device* → Raspberry Pi 5. *Choose OS* → *Use Custom* → velg
-`ju6pi-1.1.1.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
+`ju6pi-1.2.0.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
 OS-tilpasning, svarer du **Nei / No**. Imaget er ferdig konfigurert, og tilpasningen blir ikke brukt.
 
-**balenaEtcher:** *Flash from file* → `ju6pi-1.1.1.img.xz` → *Select target* → *Flash!*
+**balenaEtcher:** *Flash from file* → `ju6pi-1.2.0.img.xz` → *Select target* → *Flash!*
 
 **Hvis filen er delt opp** (GitHub tillater maks 2 GB per fil):
 ```sh
-cat ju6pi-1.1.1.img.xz.part-* > ju6pi-1.1.1.img.xz     # Linux/macOS
-copy /b ju6pi-1.1.1.img.xz.part-aa + ju6pi-1.1.1.img.xz.part-ab ju6pi-1.1.1.img.xz   # Windows
-sha256sum -c ju6pi-1.1.1.img.xz.sha256
+cat ju6pi-1.2.0.img.xz.part-* > ju6pi-1.2.0.img.xz     # Linux/macOS
+copy /b ju6pi-1.2.0.img.xz.part-aa + ju6pi-1.2.0.img.xz.part-ab ju6pi-1.2.0.img.xz   # Windows
+sha256sum -c ju6pi-1.2.0.img.xz.sha256
 ```
 
 ## 3. Lydmotoren
@@ -109,50 +109,62 @@ Gir din MPK andre verdier, endrer du `ju6.conf` på datapartisjonen (punkt 6). D
 **Tangenter:** spiller synthen på alle MIDI-kanaler. Anslag er **av** (som originalen).
 Oktav-knappene på MPK virker som vanlig.
 
-**Pitch-hjul / joystick X (Pitch):** BENDER, med DCO-dybde ±2 halvtoner og VCF-dybde 0 som standard (endres på side 4).
-**Mod-hjul / joystick Y (CC 1):** MOD (LFO til DCO). I manuell LFO-modus starter MOD også LFO-en.
+**Pitch-hjul / joystick X (Pitch):** BENDER, med DCO-dybde ±2 halvtoner og VCF-dybde 0 som standard (`bender_dco` / `bender_vcf` i `ju6.conf`).
+**Mod-hjul / joystick Y (CC 1):** MOD (LFO til DCO). Dybden skaleres med `mod_depth`.
 **Sustain-pedal (CC 64):** HOLD.
+**OCT −/+** på MPK flytter tastaturets oktav. Det er ikke DCO RANGE.
+
+### To sider
+
+Side 1 er aktiv etter oppstart. På **pad-bank B** velger **pad 6** (øverste rad) SIDE 1 og **pad 2** (rett under) SIDE 2.
+Skissen navngir begge paddene som sidebyttere og tegner SIDE 1 over SIDE 2; øverste pad følger øverste side.
+
+**Pad-LED viser alltid aktiv side:** padden for den aktive siden lyser sterkt rødt, den andre er slukket.
+Det gjelder både i bank A og bank B, så du ser siden også mens du velger patch. Pi-ens grønne LED blinker én gang for side 1 og to ganger for side 2.
+Andre pad-LED-er oppdateres til den siden du nettopp valgte.
+
+Lysstyrken er fire trinn, sendt som Note On-velocity på pad-kanalen: 0 = slukket, 42 = svak rød, 84 = rød, 127 = sterk rød.
+AKAI beskriver ikke sanntids-feedback i bruksanvisningen for MPK mini Plus (v1.2), så dette er **ikke verifisert på maskinvare**.
+`pad_leds = off` slår det av. `pad_leds = any` sender til alle MIDI-utganger unntatt porten «MIDI 2» (5-pins-brua). Standard `on` sender bare til porter med «MPK» i navnet.
 
 ### Pads
 
-Trykk **Bank A/B** på MPK for å bytte mellom de to pad-radene.
+Trykk **Bank A/B** på MPK for å bytte bank. Pad 1–4 er nederste rad.
 
-| Pad | Bank A (patchvalg) | Bank B (funksjoner) |
-|---|---|---|
-| 1 | patch x1 | side 1: LYD |
-| 2 | patch x2 | side 2: DCO |
-| 3 | patch x3 | side 3: MOD / HPF / VCA |
-| 4 | patch x4 | side 4: SPILL |
-| 5 | patch x5 | gruppe − |
-| 6 | patch x6 | gruppe + |
-| 7 | patch x7 | HOLD av/på |
-| 8 | patch x8 | TRANSPOSE (se under) |
+| Pad | Bank A | SIDE 1 (bank B) | SIDE 2 (bank B) |
+|---|---|---|---|
+| 1 | patch x1 | VCA LEVEL − | PULS av/på (rød = på) |
+| 2 | patch x2 | **SIDE 2** (sterk rød når siden er aktiv, ellers slukket) | samme |
+| 3 | patch x3 | ENV/GATE (rød = ENV) | SAG av/på (rød = på) |
+| 4 | patch x4 | ubrukt (slukket) | VCF ENV-polaritet (rød = invertert) |
+| 5 | patch x5 | VCA LEVEL + | DCO RANGE 16′ → 8′ → 4′ → 16′ |
+| 6 | patch x6 | **SIDE 1** (sterk rød når siden er aktiv, ellers slukket) | samme |
+| 7 | patch x7 | CHORUS av → I → II → I+II | LFO/MAN (rød = LFO) |
+| 8 | patch x8 | GRUPPE + (kort) / TRANSPOSE (hold + tangent) | samme |
 
-- **Patchvalg:** synthen har 16 grupper på 8 patcher: A1x … A8x og B1x … B8x, som på 106.
-  Bruk *gruppe −/+* for å velge gruppe og pad 1–8 i bank A for å velge patch.
-  Eksempel: gruppe A4, pad 8 gir A48 Synth Bass I. LED-en blinker gruppenummeret.
-- **Lagre:** hold en pad i bank A i **1,5 sekunder**. Lyden slik den er nå, med alle knottendringer,
-  lagres på den plassen. LED-en blinker raskt for å bekrefte. Lagrede patcher ligger i `ju6/patches.syx` på
-  datapartisjonen. Fabrikklyden kommer tilbake hvis du sletter den filen.
-- **Transpose:** hold pad 8 (bank B) og trykk en tangent. Tangenten blir ny grunntone (C4 = ingen transponering).
-  Et kort trykk på pad 8 slår transponeringen av og på.
+- **LEVEL +/−:** hvert trykk endrer VCA LEVEL med 8. Holder du padden, gjentas steget. Begge LED-ene viser nivået: svak rød ved 0, sterk rød ved 127, skalert imellom.
+- **CHORUS-LED:** av = av, svak rød = I, rød = II, sterk rød = I+II.
+- **RANGE-LED:** svak rød = 16′, rød = 8′, sterk rød = 4′. Samme lysstyrketrinn som chorus. Padden var uten navn i skissen; eieren har bestemt at den er DCO RANGE.
+- **LFO/MAN** veksler bare LFO og MAN. PWM fra ENV kan ligge i en patch (LED slukket); ett trykk velger da LFO.
+- **Patchvalg:** 16 grupper på 8 patcher, A1x … B8x. Kort trykk på pad 8 (bank B) går én gruppe frem og rundt fra B8 til A1. Pad 1–8 i bank A velger patch. Eksempel: tre trykk på GRUPPE + fra A1, deretter pad 8 i bank A, gir A48. Pi-LED-en blinker gruppenummeret.
+- **Lagre:** hold en pad i bank A i **1,5 sekunder**. Lyden slik den er nå lagres på den plassen. Pi-LED-en blinker raskt. Fabrikklyden kommer tilbake hvis du sletter `ju6/patches.syx`.
+- **Transpose:** hold pad 8 (bank B) og trykk en tangent. C4 = ingen transponering. Kort trykk bytter gruppe og slår ikke transponeringen av. Hold pad 8 og trykk midt-C for å nullstille. Pad 8 lyser sterkt rødt mens transpose er aktiv.
 - **Program Change** 0–127 velger patch A11 … B88 direkte.
 
-### Knotter (K1–K8): fire sider
+### Knotter (K1–K8)
 
-Side 1 er aktiv etter oppstart. Bytt side med pad 1–4 i bank B.
+K1–K4 er øverste rad (CC 70–73), K5–K8 nederste (CC 74–77).
 
 | | K1 | K2 | K3 | K4 | K5 | K6 | K7 | K8 |
 |---|---|---|---|---|---|---|---|---|
-| **1 LYD** | VCF FREQ | VCF RES | VCF ENV | ENV A | ENV D | ENV S | ENV R | CHORUS av / I / II / I+II |
-| **2 DCO** | RANGE 16'/8'/4' | DCO LFO | PWM | PWM-kilde LFO / MAN / ENV | BØLGE av / puls / sag / begge | SUB (0 = av) | NOISE | VCF KYBD |
-| **3 MOD** | LFO RATE | LFO DELAY | VCF LFO | VCF ENV-polaritet + / − | HPF 0 / 1 / 2 / 3 | VCA ENV / GATE | VCA LEVEL | LFO AUTO / MANUELL |
-| **4 SPILL** | BENDER → DCO | BENDER → VCF | MOD-dybde | TRANSPOSE −12 … +12 | VOLUM | STEMMER Poly I / Poly II / Unison | ANSLAG av / på | PORTAMENTO |
+| **SIDE 1** | ENV A | ENV D | ENV S | ENV R | SUB (0 = av) | NOISE | VCF FREQ | VCF RES |
+| **SIDE 2** | DCO LFO | DCO PWM | LFO RATE | LFO DELAY | HPF 0 / 1 / 2 / 3 | VCF ENV | VCF LFO | VCF KYBD |
 
-Brytere med flere trinn deler knottens vei i like store soner. CHORUS har for eksempel fire soner:
-0–31 = av, 32–63 = I, 64–95 = II og 96–127 = I+II. Knottene hopper som standard rett til ny verdi.
-Med `knob_takeover = pickup` må knotten først passere gjeldende verdi, og med `knob_mode = relative`
-følger den MPK-ens Relative-modus.
+HPF deler knottens vei i fire like soner: 0–31 = 0 (bassløft), 32–63 = 1, 64–95 = 2, 96–127 = 3.
+Knottene hopper som standard rett til ny verdi. Med `knob_takeover = pickup` må knotten først passere gjeldende verdi,
+og med `knob_mode = relative` følger den MPK-ens Relative-modus.
+
+Bender-dybde, MOD-dybde, volum (også CC 7), stemmemodus, anslag og portamento ligger i `ju6.conf`, ikke på panelet.
 
 **Andre MIDI-meldinger:** CC 7 = volum, CC 120/123 = alle toner av, CC 121 = nullstill bender/MOD,
 Juno-106-sysex (`F0 41 30 0n …` patch og `F0 41 32 0n …` parameter) lastes inn som på en 106.
@@ -303,7 +315,8 @@ Systemloggen ligger bare i RAM.
 | `mod_cc` | `1` | CC-er som styrer MOD (flere kan listes) |
 | `knob_mode` | `absolute` | eller `relative` |
 | `knob_takeover` | `jump` | eller `pickup` |
-| `save_hold_seconds` | `1.5` | hvor lenge en pad holdes for å lagre |
+| `save_hold_seconds` | `1.5` | hvor lenge en pad i bank A holdes for å lagre |
+| `pad_leds` | `on` | `on` (bare MPK), `any` (alle utganger unntatt MIDI 2) eller `off` |
 
 ## 7. Patchliste
 
@@ -374,6 +387,17 @@ Kommandoer på Pi-en (krever skjerm og tastatur, eller å montere SD-kortet):
 `journalctl -u ju6pi` (logg).
 
 ## 9. Endringer
+
+**1.2.0 (9. november 2026)**
+- Ny panelmapping i to sider, etter eierens skisse. Pad 6 (øverst) velger SIDE 1, pad 2 (rett under) velger SIDE 2.
+- SIDE 1-knotter: A, D, S, R, SUB, NOISE, VCF FREQ, VCF RES. Pads: LEVEL +/−, CHORUS av/I/II/I+II, ENV/GATE.
+- SIDE 2-knotter: DCO LFO, DCO PWM, LFO RATE, LFO DELAY, HPF, VCF ENV, VCF LFO, VCF KYBD.
+  Pads: DCO RANGE 16′→8′→4′ (padden som var uten navn), LFO/MAN, puls, sag, VCF ENV-polaritet.
+- Pad 2 og pad 6 viser aktiv side: den aktive lyser sterkt rødt, den andre er slukket, på både bank A og bank B.
+  Øvrige pad-LED-er følger siden du står på (svak/rød/sterk for chorus og range, rød = på for brytere, nivå-LED skalert).
+- Bank A er fortsatt patchvalg og lagring. Kort trykk på pad 8 er gruppe +. Hold pad 8 + tangent er transpose.
+- Pad-LED sendes som Note On. Ikke verifisert på ekte MPK mini Plus (`pad_leds = off` skrur det av).
+- Bender-dybde, MOD-dybde, stemmemodus, anslag og portamento settes i `ju6.conf`, ikke på knottene.
 
 **1.1.1 (15. oktober 2026)**
 - Retting: å holde en pad i bank A lagrer nå lyden slik du har skrudd den. Før ble patchen på padden lastet
