@@ -165,41 +165,23 @@ static int selftest(const std::string& wavDir) {
   ctl.setEmitLeds(false);
   auto ev = [](MidiEvent::Type ty, int ch, int d1, int d2) { MidiEvent e{}; e.type = ty; e.ch = (uint8_t)ch; e.d1 = (uint8_t)d1; e.d2 = (uint8_t)d2; return e; };
   double t = 0;
-  // Pad A3 (note 38, kanal 10) -> patch A13
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 38, 100), t); ctl.handle(ev(MidiEvent::NoteOff, 9, 38, 0), t + 0.1);
-  check(ctl.currentSlot() == 2, "pad 3 (bank A) velger patch A13");
-  // Lagre etter redigering (1.1.1): hold pad A4 -> den REDIGERTE lyden lagres, ikke den gamle
-  {
-    Bank b2; b2.loadFactory(); Synth y; y.init(48000, 1024, 2); RequestQueue q2; Controller c3(y, b2, q2, cc);
-    c3.setEmitLeds(false);
-    c3.selectSlot(0, false);
-    Synth tmp; tmp.init(48000, 1024, 2); tmp.loadPatch(b2.patch[3]); const float before = tmp.get(kVcfFreq);
-    const int v = before > 0.5f ? 10 : 117; const float want = v / 127.f;
-    c3.handle(ev(MidiEvent::CC, 0, 76, v), 10.0);
-    check(std::fabs(y.get(kVcfFreq) - want) < 1e-3, "lagretest: side 1 knott 7 (CC76) endrer VCF FREQ");
-    c3.handle(ev(MidiEvent::NoteOn, 9, 39, 100), 10.0);
-    check(std::fabs(y.get(kVcfFreq) - want) < 1e-3, "trykk på pad laster ikke patch (redigering beholdes)");
-    c3.tick(10.5); c3.handle(ev(MidiEvent::CC, 0, 76, v), 10.6); c3.tick(11.6);
-    c3.handle(ev(MidiEvent::NoteOff, 9, 39, 0), 11.7);
-    tmp.loadPatch(b2.patch[3]);
-    check(c3.currentSlot() == 3 && std::fabs(tmp.get(kVcfFreq) - want) < 0.02, "hold pad A4: redigert lyd lagret i A14");
-    check(std::fabs(y.get(kVcfFreq) - want) < 1e-3, "slipp etter lagring laster ikke på nytt");
-    c3.handle(ev(MidiEvent::NoteOn, 9, 36, 100), 12.0); c3.handle(ev(MidiEvent::NoteOff, 9, 36, 0), 12.1);
-    check(c3.currentSlot() == 0, "kort trykk pad A1 laster A11");
-    c3.handle(ev(MidiEvent::NoteOn, 9, 39, 100), 13.0); c3.handle(ev(MidiEvent::NoteOff, 9, 39, 0), 13.2);
-    check(c3.currentSlot() == 3 && std::fabs(y.get(kVcfFreq) - want) < 0.02, "A14 lastet igjen har den lagrede redigeringen");
-  }
+  // Neste/forrige lyd: ett patchminne (spor 0–127). Pad 5 = +1, pad 1 = −1. Begge banker.
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
+  check(ctl.currentSlot() == 1, "pad 5 (neste lyd) går fra A11 til A12");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 40, 100), t);   // bank A, samme fysiske pad
+  check(ctl.currentSlot() == 2, "pad 5 i bank A er også neste lyd (A13)");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 44, 100), t);
+  check(ctl.currentSlot() == 1, "pad 1 (forrige lyd) går tilbake til A12");
+  ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 44, 100), t);
+  check(ctl.currentSlot() == 127, "forrige lyd fra A11 går rundt til B88");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
+  check(ctl.currentSlot() == 0, "neste lyd fra B88 går rundt til A11");
   check(ctl.page() == 0, "SIDE 1 er aktiv etter oppstart");
   check(ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff,
         "SIDE 1: pad 6 lyser, pad 2 er slukket");
-  // Gruppe + er kort trykk på pad 8 (bank B, note 51). Slot 2 (A13) -> A23.
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t); ctl.handle(ev(MidiEvent::NoteOff, 9, 51, 0), t);
-  check(ctl.currentSlot() == 10, "kort trykk pad B8 (gruppe +) gir A23");
-  ctl.handle(ev(MidiEvent::Program, 0, 127, 0), t);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t); ctl.handle(ev(MidiEvent::NoteOff, 9, 51, 0), t);
-  check(ctl.currentSlot() == 7, "gruppe + fra B88 går rundt til A18");
-  ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
-  check(ctl.currentSlot() == 0, "Program Change 0 gir A11");
+  check(ctl.padLedVelocity(4) == kLedOff && ctl.padLedVelocity(0) == kLedOff,
+        "neste/forrige-padene er slukket");
   // SIDE 1-knotter: K1 = ENV A (CC70), K7 = VCF FREQ (CC76), K8 = VCF RES (CC77)
   ctl.handle(ev(MidiEvent::CC, 0, 70, 64), t);
   check(std::fabs(s.get(kEnvA) - 64 / 127.f) < 1e-4, "side 1 knott 1 (CC70) = ENV A");
@@ -207,39 +189,38 @@ static int selftest(const std::string& wavDir) {
   check(std::fabs(s.get(kVcfFreq) - 1.f) < 1e-4, "side 1 knott 7 (CC76) = VCF FREQ");
   ctl.handle(ev(MidiEvent::CC, 0, 77, 0), t);
   check(std::fabs(s.get(kVcfRes) - 0.f) < 1e-4, "side 1 knott 8 (CC77) = VCF RES");
-  // Chorus-pad (pad 7, note 50): av -> I -> II -> I+II -> av
+  // Chorus-pad (pad 8, note 51): av -> I -> II -> I+II -> av
   auto chorus = [&] { return (s.get(kChorusI) > 0.5f ? 1 : 0) + (s.get(kChorusII) > 0.5f ? 2 : 0); };
   int c0 = chorus();
   const int chorusLed[4] = { kLedOff, kLedWeak, kLedRed, kLedStrong };
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
-  check(chorus() == (c0 + 1) % 4, "pad B7 på side 1 går ett chorus-trinn frem");
-  check(ctl.padLedVelocity(6) == chorusLed[chorus()], "chorus-LED: av / svak / rød / sterk");
-  for (int i = 0; i < 3; i++) ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
+  check(chorus() == (c0 + 1) % 4, "pad 8 på side 1 går ett chorus-trinn frem");
+  check(ctl.padLedVelocity(7) == chorusLed[chorus()], "chorus-LED: av / svak / rød / sterk");
+  for (int i = 0; i < 3; i++) ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
   check(chorus() == c0, "fire chorus-trykk er tilbake ved utgangspunktet");
-  // VCA LEVEL + (pad 5, note 48) og LEVEL − (pad 1, note 44), steg 8
+  // VCA LEVEL + (pad 7, note 50) og LEVEL − (pad 3, note 46), steg 8
   int lvl = (int)std::lround(s.get(kVcaLevel) * 127.f);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
-  check((int)std::lround(s.get(kVcaLevel) * 127.f) == std::min(127, lvl + kLevelStep), "pad B5 LEVEL + øker VCA LEVEL");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
+  check((int)std::lround(s.get(kVcaLevel) * 127.f) == std::min(127, lvl + kLevelStep), "pad 7 LEVEL + øker VCA LEVEL");
   int up = (int)std::lround(s.get(kVcaLevel) * 127.f);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 44, 100), t);
-  check((int)std::lround(s.get(kVcaLevel) * 127.f) == std::max(0, up - kLevelStep), "pad B1 LEVEL − senker VCA LEVEL");
-  check(ctl.padLedVelocity(4) == ctl.padLedVelocity(0) && ctl.padLedVelocity(4) == levelLedVelocity(up - kLevelStep > 0 ? up - kLevelStep : 0),
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 46, 100), t);
+  int back = (int)std::lround(s.get(kVcaLevel) * 127.f);
+  check(back == std::max(0, up - kLevelStep), "pad 3 LEVEL − senker VCA LEVEL");
+  check(ctl.padLedVelocity(6) == ctl.padLedVelocity(2) && ctl.padLedVelocity(6) == levelLedVelocity(back),
         "LEVEL-padene viser samme styrke, svak ved MIN og sterk ved MAX");
-  s.set(kVcaLevel, 0.f); check(ctl.padLedVelocity(4) == kLedWeak, "VCA LEVEL 0 = svak rød");
-  s.set(kVcaLevel, 1.f); check(ctl.padLedVelocity(4) == kLedStrong, "VCA LEVEL 127 = sterk rød");
-  // Hold LEVEL + gjentar steget
+  s.set(kVcaLevel, 0.f); check(ctl.padLedVelocity(6) == kLedWeak, "VCA LEVEL 0 = svak rød");
+  s.set(kVcaLevel, 1.f); check(ctl.padLedVelocity(6) == kLedStrong, "VCA LEVEL 127 = sterk rød");
   s.set(kVcaLevel, 0.f);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), 30.0);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), 30.0);
   ctl.tick(30.41);
   check((int)std::lround(s.get(kVcaLevel) * 127.f) == 2 * kLevelStep, "hold LEVEL + gjentar steget");
-  ctl.handle(ev(MidiEvent::NoteOff, 9, 48, 0), 30.5);
-  // ENV/GATE (pad 3, note 46): rød = ENV
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 46, 100), t);
+  ctl.handle(ev(MidiEvent::NoteOff, 9, 50, 0), 30.5);
+  // ENV/GATE (pad 4, note 47): rød = ENV
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 47, 100), t);
   bool envNow = (int)std::lround(s.get(kVcaMode)) == 0;
-  check(ctl.padLedVelocity(2) == (envNow ? kLedRed : kLedOff), "ENV/GATE-LED: rød = ENV, av = GATE");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 46, 100), t);
-  check(((int)std::lround(s.get(kVcaMode)) == 0) != envNow, "pad B3 veksler ENV/GATE");
-  check(ctl.padLedVelocity(3) == kLedOff, "pad 4 er ubrukt på side 1 og er slukket");
+  check(ctl.padLedVelocity(3) == (envNow ? kLedRed : kLedOff), "ENV/GATE-LED: rød = ENV, av = GATE");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 47, 100), t);
+  check(((int)std::lround(s.get(kVcaMode)) == 0) != envNow, "pad 4 veksler ENV/GATE");
   // SIDE 2 (pad 2, note 45). Pad 6 slukkes, pad 2 tennes.
   ctl.handle(ev(MidiEvent::NoteOn, 9, 45, 100), t);
   check(ctl.page() == 1, "pad B2 velger SIDE 2");
@@ -253,59 +234,39 @@ static int selftest(const std::string& wavDir) {
   check(std::fabs(s.get(kDcoLfo) - 90 / 127.f) < 1e-3, "side 2 knott 1 (CC70) = DCO LFO");
   ctl.handle(ev(MidiEvent::CC, 0, 74, 0), t);
   check((int)std::lround(s.get(kHpfFreq)) == 0, "side 2 knott 5 (CC74) = HPF (0 = bassløft)");
-  // RANGE (pad 5): 16' -> 8' -> 4' -> 16'. LED svak / rød / sterk.
-  int o0 = (int)std::lround(s.get(kOctTranspose));
-  const int rangeLed[3] = { kLedWeak, kLedRed, kLedStrong };
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
-  int o1 = (int)std::lround(s.get(kOctTranspose));
-  check(o1 == (o0 + 1) % 3, "pad B5 på side 2 går ett RANGE-trinn (16' -> 8' -> 4')");
-  check(ctl.padLedVelocity(4) == rangeLed[o1], "RANGE-LED: svak = 16', rød = 8', sterk = 4'");
-  for (int i = 0; i < 2; i++) ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
-  check((int)std::lround(s.get(kOctTranspose)) == o0, "tre RANGE-trykk er tilbake ved utgangspunktet");
-  // Puls og sag er hver for seg (pad 1 og pad 3). Rød = på.
+  // Puls (pad 3, note 46) og sag (pad 4, note 47) er hver for seg. Rød = på.
+  int oct = (int)std::lround(s.get(kOctTranspose));
   bool pulse = s.get(kDcoPulse) > 0.5f, saw = s.get(kDcoSaw) > 0.5f;
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 44, 100), t);
-  check((s.get(kDcoPulse) > 0.5f) != pulse && (s.get(kDcoSaw) > 0.5f) == saw, "pad B1 veksler puls uten å røre sag");
-  check(ctl.padLedVelocity(0) == ((s.get(kDcoPulse) > 0.5f) ? kLedRed : kLedOff), "puls-LED: rød = på, slukket = av");
   ctl.handle(ev(MidiEvent::NoteOn, 9, 46, 100), t);
-  check((s.get(kDcoSaw) > 0.5f) != saw, "pad B3 veksler sag");
-  check(ctl.padLedVelocity(2) == ((s.get(kDcoSaw) > 0.5f) ? kLedRed : kLedOff), "sag-LED: rød = på, slukket = av");
-  // LFO/MAN (pad 7). Rød = LFO. ENV (2) behandles som ikke-LFO og blir LFO ved trykk.
-  s.set(kPwmMode, 2.f);
-  check(ctl.padLedVelocity(6) == kLedOff, "PWM fra ENV lyser ikke (samme som MAN)");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
-  check((int)std::lround(s.get(kPwmMode)) == 0 && ctl.padLedVelocity(6) == kLedRed, "pad B7 velger LFO og lyser rødt");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
-  check((int)std::lround(s.get(kPwmMode)) == 1 && ctl.padLedVelocity(6) == kLedOff, "nytt trykk velger MAN og slukker");
-  // VCF ENV-polaritet (pad 4). Rød = invertert.
-  bool inv = s.get(kVcfEnvInv) > 0.5f;
+  check((s.get(kDcoPulse) > 0.5f) != pulse && (s.get(kDcoSaw) > 0.5f) == saw, "pad 3 veksler puls uten å røre sag");
+  check(ctl.padLedVelocity(2) == ((s.get(kDcoPulse) > 0.5f) ? kLedRed : kLedOff), "puls-LED: rød = på, slukket = av");
   ctl.handle(ev(MidiEvent::NoteOn, 9, 47, 100), t);
-  check((s.get(kVcfEnvInv) > 0.5f) != inv, "pad B4 veksler VCF ENV-polaritet");
-  check(ctl.padLedVelocity(3) == ((s.get(kVcfEnvInv) > 0.5f) ? kLedRed : kLedOff), "polaritet-LED: rød = invertert");
-  // Tilbake til side 1: funksjons-LED-ene følger siden, side-padene viser SIDE 1
+  check((s.get(kDcoSaw) > 0.5f) != saw, "pad 4 veksler sag");
+  check(ctl.padLedVelocity(3) == ((s.get(kDcoSaw) > 0.5f) ? kLedRed : kLedOff), "sag-LED: rød = på, slukket = av");
+  check((int)std::lround(s.get(kOctTranspose)) == oct, "side 2-padene endrer ikke DCO RANGE");
+  // LFO/MAN (pad 8, note 51). Rød = LFO.
+  s.set(kPwmMode, 2.f);
+  check(ctl.padLedVelocity(7) == kLedOff, "PWM fra ENV lyser ikke (samme som MAN)");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
+  check((int)std::lround(s.get(kPwmMode)) == 0 && ctl.padLedVelocity(7) == kLedRed, "pad 8 velger LFO og lyser rødt");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
+  check((int)std::lround(s.get(kPwmMode)) == 1 && ctl.padLedVelocity(7) == kLedOff, "nytt trykk velger MAN og slukker");
+  // VCF-polaritet (pad 7, note 50). På = rød = invertert.
+  bool inv = s.get(kVcfEnvInv) > 0.5f;
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
+  check((s.get(kVcfEnvInv) > 0.5f) != inv, "pad 7 veksler VCF-polaritet");
+  check(ctl.padLedVelocity(6) == ((s.get(kVcfEnvInv) > 0.5f) ? kLedRed : kLedOff), "polaritet-LED: rød = på");
   ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
   check(ctl.page() == 0 && ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff,
         "sidebytte oppdaterer pad 2 og pad 6 til aktiv side");
-  check(ctl.padLedVelocity(6) == chorusLed[chorus()], "chorus-LED er tilbake når side 1 vises");
-  // Sustain er fortsatt HOLD. Transpose: hold pad 8 + tangent. Kort trykk er gruppe +, ikke av/på.
+  check(ctl.padLedVelocity(7) == chorusLed[chorus()], "chorus-LED er tilbake når side 1 vises");
   ctl.handle(ev(MidiEvent::CC, 0, 64, 127), t);
   check(s.get(kHold) > 0.5f, "CC64 (sustain) = Hold");
   ctl.handle(ev(MidiEvent::CC, 0, 64, 0), t);
-  int slotBefore = ctl.currentSlot();
   ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), 10.0);
   ctl.handle(ev(MidiEvent::NoteOn, 0, 65, 100), 10.1); ctl.handle(ev(MidiEvent::NoteOff, 0, 65, 0), 10.2);
   ctl.handle(ev(MidiEvent::NoteOff, 9, 51, 0), 10.3);
-  check((int)std::lround(s.get(kTransposeOffset)) == 5, "hold pad B8 + tangent F4 gir +5");
-  check(ctl.currentSlot() == slotBefore, "hold + tangent bytter ikke gruppe");
-  check(ctl.padLedVelocity(7) == kLedStrong, "pad 8 lyser sterkt når transpose er aktiv");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), 11.0); ctl.handle(ev(MidiEvent::NoteOff, 9, 51, 0), 11.05);
-  check((int)std::lround(s.get(kTransposeOffset)) == 5, "kort trykk på pad 8 slår ikke av transpose");
-  check(ctl.currentSlot() != slotBefore, "kort trykk på pad 8 er gruppe +");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), 12.0);
-  ctl.handle(ev(MidiEvent::NoteOn, 0, 60, 100), 12.1); ctl.handle(ev(MidiEvent::NoteOff, 0, 60, 0), 12.2);
-  ctl.handle(ev(MidiEvent::NoteOff, 9, 51, 0), 12.3);
-  check((int)std::lround(s.get(kTransposeOffset)) == 0 && ctl.padLedVelocity(7) == kLedOff,
-        "hold pad 8 + midt-C nullstiller transpose");
+  check((int)std::lround(s.get(kTransposeOffset)) == 0, "hold pad + tangent setter ikke transpose");
   // Pad-LED-kø: side-padene sendes på både bank A og bank B, aktiv side sterk, den andre av.
   {
     Request r; while (rq.pop(r)) {}
@@ -332,15 +293,11 @@ static int selftest(const std::string& wavDir) {
     ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
     ctl.setEmitLeds(false);
   }
-  // Lagring: hold pad A5 i 1,6 s (gruppe A1, så plassen er A15)
-  ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
-  { Request r; while (rq.pop(r)) {} }
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 40, 100), 20.0); ctl.tick(20.5);
-  bool early = false; { Request r; while (rq.pop(r)) if (r.type == Request::SavePatch) early = true; }
-  ctl.tick(21.6);
-  bool saved = false; int savedSlot = -1; { Request r; while (rq.pop(r)) if (r.type == Request::SavePatch) { saved = true; savedSlot = r.a; } }
-  ctl.handle(ev(MidiEvent::NoteOff, 9, 40, 0), 21.7);
-  check(!early && saved && savedSlot == 4, "hold pad A5 >1,5 s lagrer til A15 (ikke før)");
+  { Request r; while (rq.pop(r)) {}
+    ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), 20.0); ctl.tick(21.6);
+    ctl.handle(ev(MidiEvent::NoteOff, 9, 50, 0), 21.7);
+    bool saved = false; while (rq.pop(r)) if (r.type == Request::SavePatch) saved = true;
+    check(!saved, "å holde en pad lagrer ikke lenger en patch"); }
   // Pitch bend / mod
   MidiEvent b{}; b.type = MidiEvent::Bend; b.bend = 16383; ctl.handle(b, t);
   ctl.handle(ev(MidiEvent::CC, 0, 1, 127), t);
@@ -376,13 +333,13 @@ static int selftest(const std::string& wavDir) {
     double e1 = 0, e2 = 0; for (size_t i = 0; i < L1.size(); i++) { e1 += L1[i] * L1[i]; e2 += L2[i] * L2[i]; }
     check(e1 > 0 && std::fabs(10 * std::log10(e1 / e2)) < 0.5, "anslag ignoreres som standard (vel 20 = vel 127)");
   }
-  // Simulert MPK-økt -> WAV: pads bytter lyd mens knott 1 sveiper filteret
+  // Simulert MPK-økt -> WAV: neste lyd, mens knott 7 sveiper filteret
   if (!wavDir.empty()) {
     Synth x; x.init(48000, 1024, 4); RequestQueue rq2; Controller c2(x, bank, rq2, cc); c2.setEmitLeds(false); c2.selectSlot(0, false);
     x.set(kMasterVol, 0.5f);
     std::vector<Ev> e; double tt = 0.1;
     auto send = [&](double at, MidiEvent m) { e.push_back({at, [&c2, m, at](Synth&) { c2.handle(m, at); }}); };
-    int pads[4] = {36, 39, 41, 43};
+    int pads[4] = {48, 48, 48, 48};
     for (int i = 0; i < 4; i++) {
       send(tt, ev(MidiEvent::NoteOn, 9, pads[i], 100)); send(tt + 0.05, ev(MidiEvent::NoteOff, 9, pads[i], 0));
       for (int n : {48, 55, 60, 64}) { send(tt + 0.1, ev(MidiEvent::NoteOn, 0, n, 64)); send(tt + 2.3, ev(MidiEvent::NoteOff, 0, n, 0)); }

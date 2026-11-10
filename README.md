@@ -116,11 +116,11 @@ Oktav-knappene på MPK virker som vanlig.
 
 ### To sider
 
-Side 1 er aktiv etter oppstart. På **pad-bank B** velger **pad 6** (øverste rad) SIDE 1 og **pad 2** (rett under) SIDE 2.
-Skissen navngir begge paddene som sidebyttere og tegner SIDE 1 over SIDE 2; øverste pad følger øverste side.
+Side 1 er aktiv etter oppstart. **Pad 6** (øverste rad) velger SIDE 1 og **pad 2** (rett under) velger SIDE 2.
+Begge pad-banker på MPK gjør det samme.
 
 **Pad-LED viser alltid aktiv side:** padden for den aktive siden lyser sterkt rødt, den andre er slukket.
-Det gjelder både i bank A og bank B, så du ser siden også mens du velger patch. Pi-ens grønne LED blinker én gang for side 1 og to ganger for side 2.
+Pi-ens grønne LED blinker én gang for side 1 og to ganger for side 2.
 Andre pad-LED-er oppdateres til den siden du nettopp valgte.
 
 Lysstyrken er fire trinn, sendt som Note On-velocity på pad-kanalen: 0 = slukket, 42 = svak rød, 84 = rød, 127 = sterk rød.
@@ -131,25 +131,23 @@ AKAI beskriver ikke sanntids-feedback i bruksanvisningen for MPK mini Plus (v1.2
 
 Trykk **Bank A/B** på MPK for å bytte bank. Pad 1–4 er nederste rad.
 
-| Pad | Bank A | SIDE 1 (bank B) | SIDE 2 (bank B) |
-|---|---|---|---|
-| 1 | patch x1 | VCA LEVEL − | PULS av/på (rød = på) |
-| 2 | patch x2 | **SIDE 2** (sterk rød når siden er aktiv, ellers slukket) | samme |
-| 3 | patch x3 | ENV/GATE (rød = ENV) | SAG av/på (rød = på) |
-| 4 | patch x4 | ubrukt (slukket) | VCF ENV-polaritet (rød = invertert) |
-| 5 | patch x5 | VCA LEVEL + | DCO RANGE 16′ → 8′ → 4′ → 16′ |
-| 6 | patch x6 | **SIDE 1** (sterk rød når siden er aktiv, ellers slukket) | samme |
-| 7 | patch x7 | CHORUS av → I → II → I+II | LFO/MAN (rød = LFO) |
-| 8 | patch x8 | GRUPPE + (kort) / TRANSPOSE (hold + tangent) | samme |
+| Pad | SIDE 1 | SIDE 2 |
+|---|---|---|
+| 5 | neste lyd (+1) | samme |
+| 6 | **SIDE 1** (sterk rød når siden er aktiv, ellers slukket) | samme |
+| 7 | VCA LEVEL + | VCF-polaritet (rød = på / invertert) |
+| 8 | CHORUS av → I → II → I+II | PWM LFO/MAN (rød = LFO) |
+| 1 | forrige lyd (−1) | samme |
+| 2 | **SIDE 2** (sterk rød når siden er aktiv, ellers slukket) | samme |
+| 3 | VCA LEVEL − | PULS av/på (rød = på) |
+| 4 | ENV/GATE (rød = ENV) | SAG av/på (rød = på) |
 
+- **Lyd:** én patch, spor 0–127 (A11 … B88). Neste er +1 og går rundt fra B88 til A11. Forrige er −1 og går rundt fra A11 til B88. Steget krysser gruppe og bank (A18 + 1 = A21, A88 + 1 = B11). Den laster lagret patch og beholder volumet. Pi-LED-en blinker ikke for dette.
 - **LEVEL +/−:** hvert trykk endrer VCA LEVEL med 8. Holder du padden, gjentas steget. Begge LED-ene viser nivået: svak rød ved 0, sterk rød ved 127, skalert imellom.
 - **CHORUS-LED:** av = av, svak rød = I, rød = II, sterk rød = I+II.
-- **RANGE-LED:** svak rød = 16′, rød = 8′, sterk rød = 4′. Samme lysstyrketrinn som chorus. Padden var uten navn i skissen; eieren har bestemt at den er DCO RANGE.
 - **LFO/MAN** veksler bare LFO og MAN. PWM fra ENV kan ligge i en patch (LED slukket); ett trykk velger da LFO.
-- **Patchvalg:** 16 grupper på 8 patcher, A1x … B8x. Kort trykk på pad 8 (bank B) går én gruppe frem og rundt fra B8 til A1. Pad 1–8 i bank A velger patch. Eksempel: tre trykk på GRUPPE + fra A1, deretter pad 8 i bank A, gir A48. Pi-LED-en blinker gruppenummeret.
-- **Lagre:** hold en pad i bank A i **1,5 sekunder**. Lyden slik den er nå lagres på den plassen. Pi-LED-en blinker raskt. Fabrikklyden kommer tilbake hvis du sletter `ju6/patches.syx`.
-- **Transpose:** hold pad 8 (bank B) og trykk en tangent. C4 = ingen transponering. Kort trykk bytter gruppe og slår ikke transponeringen av. Hold pad 8 og trykk midt-C for å nullstille. Pad 8 lyser sterkt rødt mens transpose er aktiv.
-- **Program Change** 0–127 velger patch A11 … B88 direkte.
+- **DCO RANGE** ligger i patchen og har ingen pad. **Transpose** er tatt av panelet.
+- **Program Change** 0–127 velger patch A11 … B88 direkte. Panelet skriver ikke patcher. Slett `ju6/patches.syx` for å få fabrikklydene tilbake.
 
 ### Knotter (K1–K8)
 
@@ -366,7 +364,7 @@ sudo apt install g++ make libasound2-dev g++-aarch64-linux-gnu libasound2-dev:ar
                  qemu-user-static fdisk dosfstools mtools e2fsprogs zerofree xz-utils
 make                    # vert-binær: build/ju6pi
 make samples            # WAV-prøver til samples/
-./build/ju6pi selftest  # tester MPK-mapping, lagring, transpose, sysex …
+./build/ju6pi selftest  # tester MPK-mapping, neste/forrige lyd, sysex …
 make arm64              # build/ju6pi-arm64 (Cortex-A76)
 sudo image/build-image.sh 2026-10-06-raspios-trixie-arm64-lite.img.xz build/ju6pi-arm64 ju6pi.img
 xz -T0 -9 ju6pi.img
@@ -389,15 +387,12 @@ Kommandoer på Pi-en (krever skjerm og tastatur, eller å montere SD-kortet):
 ## 9. Endringer
 
 **1.2.0 (9. november 2026)**
-- Ny panelmapping i to sider, etter eierens skisse. Pad 6 (øverst) velger SIDE 1, pad 2 (rett under) velger SIDE 2.
-- SIDE 1-knotter: A, D, S, R, SUB, NOISE, VCF FREQ, VCF RES. Pads: LEVEL +/−, CHORUS av/I/II/I+II, ENV/GATE.
-- SIDE 2-knotter: DCO LFO, DCO PWM, LFO RATE, LFO DELAY, HPF, VCF ENV, VCF LFO, VCF KYBD.
-  Pads: DCO RANGE 16′→8′→4′ (padden som var uten navn), LFO/MAN, puls, sag, VCF ENV-polaritet.
-- Pad 2 og pad 6 viser aktiv side: den aktive lyser sterkt rødt, den andre er slukket, på både bank A og bank B.
-  Øvrige pad-LED-er følger siden du står på (svak/rød/sterk for chorus og range, rød = på for brytere, nivå-LED skalert).
-- Bank A er fortsatt patchvalg og lagring. Kort trykk på pad 8 er gruppe +. Hold pad 8 + tangent er transpose.
+- Tosiders panel etter den rene skissen. Pad 6 velger SIDE 1, pad 2 velger SIDE 2. Aktiv side-pad lyser sterkt rødt, den andre er slukket.
+- Pad 5 = neste lyd, pad 1 = forrige lyd. En lyd er ett patchminne (spor 0–127, A11…B88), med wrap.
+- SIDE 1: LEVEL +/− (pad 7/3), CHORUS (pad 8), ENV/GATE (pad 4). Knotter: A D S R, SUB, NOISE, VCF FREQ, VCF RES.
+- SIDE 2: VCF-polaritet (pad 7), PWM LFO/MAN (pad 8), puls (pad 3), sag (pad 4). Knotter: DCO LFO, DCO PWM, LFO RATE, LFO DELAY, HPF, VCF ENV, VCF LFO, VCF KYBD.
+- DCO RANGE og transpose (hold pad + tangent) er tatt av panelet. Begge pad-banker gjør samme panel. Panelet lagrer ikke patcher.
 - Pad-LED sendes som Note On. Ikke verifisert på ekte MPK mini Plus (`pad_leds = off` skrur det av).
-- Bender-dybde, MOD-dybde, stemmemodus, anslag og portamento settes i `ju6.conf`, ikke på knottene.
 
 **1.1.1 (15. oktober 2026)**
 - Retting: å holde en pad i bank A lagrer nå lyden slik du har skrudd den. Før ble patchen på padden lastet

@@ -12,10 +12,10 @@ assert len(NAMES) == 128
 S1 = ["ENV|A", "ENV|D", "ENV|S", "ENV|R", "DCO|SUB", "DCO|NOISE", "VCF|FREQ", "VCF|RES"]
 S2 = ["DCO|LFO", "DCO|PWM", "LFO|RATE", "LFO|DELAY", "HPF|0·1·2·3", "VCF|ENV", "VCF|LFO", "VCF|KYBD"]
 # Pad labels, index 0 = pad 1 (lower row, left). Pads 1–4 are the lower row.
-SIDE1_PADS = [("LEVEL −", "VCA, step 8"), ("SIDE 2", "page, lit when active"), ("ENV / GATE", "red = ENV"), ("—", "unused on side 1"),
-              ("LEVEL +", "VCA, step 8"), ("SIDE 1", "page, lit when active"), ("CHORUS", "off · I · II · I+II"), ("GROUP +", "hold = transpose")]
-SIDE2_PADS = [("PULSE", "red = on"), ("SIDE 2", "page, lit when active"), ("SAW", "red = on"), ("ENV POL", "red = inverted"),
-              ("RANGE", "16' · 8' · 4'"), ("SIDE 1", "page, lit when active"), ("LFO / MAN", "red = LFO"), ("GROUP +", "hold = transpose")]
+SIDE1_PADS = [("PREVIOUS", "sound −1"), ("SIDE 2", "off on side 1"), ("LEVEL −", "VCA, step 8"), ("ENV / GATE", "red = ENV"),
+              ("NEXT", "sound +1"), ("SIDE 1", "lit when active"), ("LEVEL +", "VCA, step 8"), ("CHORUS", "off · I · II · I+II")]
+SIDE2_PADS = [("PREVIOUS", "sound −1"), ("SIDE 2", "lit when active"), ("PULSE", "red = on"), ("SAW", "red = on"),
+              ("NEXT", "sound +1"), ("SIDE 1", "off on side 2"), ("ENV POL", "red = on"), ("LFO / MAN", "red = LFO")]
 
 def pg(title, pages):  # generic page wrapper
     return pages
@@ -41,8 +41,8 @@ def sides_for(key):
     if v1[4] == 0: s1[4] += " (off)"
     s2 = [str(x) for x in v2]
     s2[4] = f"{v2[4]} = HPF {L['hpf']}"
-    pads = (f"RANGE {L['range']} · pulse/saw {L['wave']} · PWM {L['pwmsrc']} · "
-            f"CHORUS {L['chorus']} · VCA {L['vca']} · ENV polarity {L['envpol']} · LEVEL {c[6]}")
+    pads = (f"pulse/saw {L['wave']} · PWM {L['pwmsrc']} · "
+            f"CHORUS {L['chorus']} · VCA {L['vca']} · ENV polarity {L['envpol']} · LEVEL {c[6]} · RANGE stays {L['range']} (stored in the patch, not on a pad)")
     return v1, v2, s1, s2, pads
 
 def tutorial(key, title, intro, steps):
@@ -125,7 +125,7 @@ H.append(f'''<section class="page" id="s2">{sect(2, "Important Notes")}
 </ul>
 <h2>What is not on board</h2>
 <p>For a clean, fast boot the image has Wi-Fi, Bluetooth, SSH, NetworkManager, cloud-init, avahi, cron, apt timers and swap switched off. The system log is kept in RAM only. All configuration is done by editing a text file on the SD card (see section 12).</p>
-{note("warn", "This manual describes software version <b>1.2.0</b>. The panel is two sides (section 3), not the four knob pages of 1.0.0–1.1.1. DAC+ support arrived in 1.1.0. Since 1.1.1, holding a bank-A pad writes the sound you have edited.")}
+{note("warn", "This manual describes software version <b>1.2.0</b>. The panel is two sides (section 3). Sounds are chosen one patch at a time with pad 5 and pad 1. The panel does not write patches and has no transpose control. DAC+ support arrived in 1.1.0.")}
 </section>''')
 
 # ---------------- 3 PANEL DESCRIPTIONS ----------------
@@ -139,13 +139,13 @@ H.append(f'''<section class="page" id="s3">{sect(3, "Panel Descriptions")}
 <tr><td>{callout_html(3, True)}</td><td><b>Modulation wheel</b> (CC 1) — MOD: LFO vibrato on the DCO. Depth follows how far the wheel is moved (scaled by <code>mod_depth</code>, default 0.5).</td></tr>
 <tr><td>{callout_html(4, True)}</td><td><b>X-Y joystick</b> — JU-6 Pi reacts to whatever the joystick sends: <b>Pitch Bend</b> acts as BENDER, <b>CC 1</b> acts as MOD. Other CC numbers are ignored unless listed in <code>mod_cc</code>. <span class="unv">NOT VERIFIED: which messages the joystick sends in the MPK's default program.</span></td></tr>
 <tr><td>{callout_html(5, True)}</td><td><b>OCT − / OCT +</b> — handled inside the MPK; shifts the keyboard range. Press both to return to the centre octave.</td></tr>
-<tr><td>{callout_html(6, True)}</td><td><b>Pads 1–8</b> — bank A: patch number 1–8 (hold 1.5 s to write). Bank B: the two panel sides below. <b>Pad 6</b> (upper row) selects SIDE 1. <b>Pad 2</b> (lower row, directly under pad 6) selects SIDE 2. The pad for the active side stays lit; the other stays off.</td></tr>
-<tr><td>{callout_html(7, True)}</td><td><b>BANK A/B</b> — switches the pads between bank A (patches) and bank B (the panel). Page LEDs are sent for both banks, so pad 2 and pad 6 still show the active side after you change bank.</td></tr>
+<tr><td>{callout_html(6, True)}</td><td><b>Pads 1–8</b> — the two panel sides below. Bank A and bank B send different notes, and both are the same panel. <b>Pad 6</b> (upper row) selects SIDE 1. <b>Pad 2</b> (lower row, directly under pad 6) selects SIDE 2. The pad for the active side stays lit strong red; the other stays off. <b>Pad 5</b> is the next sound and <b>pad 1</b> the previous sound.</td></tr>
+<tr><td>{callout_html(7, True)}</td><td><b>BANK A/B</b> — switches which notes the pads send. JU-6 Pi treats both banks as this panel, so the layout does not change. LEDs are sent for both banks’ notes.</td></tr>
 <tr><td>{callout_html(8, True)}</td><td><b>Knobs K1–K8</b> (CC 70–77) — sound parameters. What each knob does depends on the selected side (below).</td></tr>
 <tr><td>{callout_html(9, True)}</td><td><b>USB port</b> — connect to any USB port on the Pi. Carries MIDI and powers the MPK.</td></tr>
 <tr><td>{callout_html(10, True)}</td><td><b>Sustain input</b> — a sustain pedal (CC 64) works as HOLD.</td></tr>
 </table>
-{note("note", "The other MPK functions (arpeggiator, scales, chords, note repeat, sequencer, transport buttons, CV/Gate, 5-pin MIDI) are run by the MPK itself. They are not used or tested by JU-6 Pi; any notes they produce over USB are simply played. OCT −/+ still shift the keyboard inside the MPK. That is not DCO RANGE, which is a pad on SIDE 2. The modulation wheel is still LFO vibrato on the DCO.")}
+{note("note", "The other MPK functions (arpeggiator, scales, chords, note repeat, sequencer, transport buttons, CV/Gate, 5-pin MIDI) are run by the MPK itself. They are not used or tested by JU-6 Pi; any notes they produce over USB are simply played. OCT −/+ still shift the keyboard inside the MPK. DCO RANGE is stored in each patch and is not on the panel. The modulation wheel is still LFO vibrato on the DCO.")}
 </section>''')
 
 # ---------------- 3c two sides ----------------
@@ -154,19 +154,17 @@ H.append(f'''<section class="page">
 <p>JU-6 Pi starts on <b>SIDE 1</b>. On pad bank B, press <b>pad 6</b> for SIDE 1 or <b>pad 2</b> for SIDE 2. Both presses work from either side. The green ACT LED on the Pi blinks once for SIDE 1 and twice for SIDE 2.</p>
 <p><b>The page pads themselves show which side is active.</b> While SIDE 1 is selected, pad 6 stays lit strong red and pad 2 stays off. While SIDE 2 is selected, pad 2 stays lit strong red and pad 6 stays off. Switching sides updates these two LEDs immediately, together with the LEDs of the pads whose job changes. The same two notes are sent for bank A and bank B, so the active side stays visible after you press BANK A/B.</p>
 {note("note", "The sketch names pad 2 and pad 6 as the page switches and draws SIDE 1 above SIDE 2. It does not spell out which pad is which. Pad 6 is the upper pad of the pair and selects the upper side; pad 2, directly beneath it, selects SIDE 2.")}
-<div class="kp2">{side_pads("SIDE 1  ·  bank B", SIDE1_PADS, "lower row = pads 1–4")}{side_pads("SIDE 2  ·  bank B", SIDE2_PADS, "pad 5 was the unlabelled pad")}</div>
-<p class="cap">Pad 8 is GROUP + on a short press (the 16 groups wrap A1 → … → B8 → A1). Hold pad 8 and play a key to set TRANSPOSE; C4 (middle C) is no transposition. Pad 4 does nothing on SIDE 1.</p>
+<div class="kp2">{side_pads("SIDE 1", SIDE1_PADS, "lower row = pads 1–4")}{side_pads("SIDE 2", SIDE2_PADS, "same next/previous and page pads")}</div>
+<p class="cap">A <b>sound</b> is one patch memory: slot 0 is A11, slot 7 is A18, slot 8 is A21, slot 63 is A88, slot 64 is B11 and slot 127 is B88. Next adds one and wraps from B88 to A11. Previous subtracts one and wraps from A11 to B88. The step crosses group and bank boundaries. The Pi LED does not blink for a sound step; it blinks only when the side changes.</p>
 <div class="kp2">{knob_page("SIDE 1  ·  K1–K4 top, K5–K8 bottom", S1)}{knob_page("SIDE 2  ·  K1–K4 top, K5–K8 bottom", S2)}</div>
 <h2>What the pad LEDs mean</h2>
 <p>Brightness is one red lamp in four steps: <b>off</b>, <b>weak red</b>, <b>red</b>, <b>strong red</b>. On a page change, every pad LED is set again for the side you just selected.</p>
 <table class="grid small">
 <tr><th>Pad</th><th>SIDE 1</th><th>SIDE 2</th></tr>
 <tr><td>6 / 2</td><td colspan="2">The active side is <b>strong red</b>. The other page pad is <b>off</b>. This pair is updated on every page change and is sent for both pad banks.</td></tr>
-<tr><td>5 and 1</td><td><b>VCA LEVEL +</b> and <b>LEVEL −</b>. Each press moves the level by 8 (holding repeats). Both LEDs show the level: weak red at 0, strong red at 127, scaled in between. They are never fully off.</td><td>Pad 5 = <b>DCO RANGE</b>, each press cycles 16′ → 8′ → 4′ → 16′. Weak red = 16′, red = 8′, strong red = 4′ (the same brightness steps as chorus). Pad 1 = <b>pulse</b> on/off: red = on, off = unlit.</td></tr>
-<tr><td>7</td><td><b>CHORUS</b>, each press cycles off → I → II → I+II → off. LED off / weak red / red / strong red in that order.</td><td><b>LFO / MAN</b> for the PWM source. Red = LFO, unlit = MAN.</td></tr>
-<tr><td>3</td><td><b>ENV / GATE</b> for the VCA. Red = ENV, unlit = GATE.</td><td><b>Saw</b> on/off. Red = on, unlit = off. Pulse and saw are independent; both may be on.</td></tr>
-<tr><td>4</td><td>Unused. The LED stays off.</td><td><b>VCF envelope polarity</b>. Red = inverted (−), unlit = normal (+).</td></tr>
-<tr><td>8</td><td colspan="2">Strong red while TRANSPOSE is not zero. Unlit at zero. The LED does not show the group number; the Pi’s ACT LED blinks that (1–8) when GROUP + is pressed.</td></tr>
+<tr><td>5 and 1</td><td colspan="2"><b>Next sound</b> (pad 5) and <b>previous sound</b> (pad 1). One patch per press, wrapping through all 128. The LEDs stay off. Both sides.</td></tr>
+<tr><td>7 and 3</td><td><b>VCA LEVEL +</b> (pad 7) and <b>LEVEL −</b> (pad 3). Each press moves the level by 8; holding repeats. Both LEDs show the level: weak red at 0, strong red at 127, scaled in between.</td><td>Pad 7 = <b>VCF polarity</b>. Red = on (inverted), unlit = off (normal). Pad 3 = <b>pulse</b> on/off: red = on, unlit = off.</td></tr>
+<tr><td>8 and 4</td><td>Pad 8 = <b>CHORUS</b>, each press cycles off → I → II → I+II → off. LED off / weak red / red / strong red. Pad 4 = <b>ENV / GATE</b>. Red = ENV, unlit = GATE.</td><td>Pad 8 = <b>PWM LFO / MAN</b>. Red = LFO, unlit = MAN. Pad 4 = <b>saw</b> on/off. Red = on, unlit = off. Pulse and saw are independent.</td></tr>
 </table>
 {note("unv", "Pad LEDs are sent as Note On (pad channel, the pad’s note, velocity 0 = off, 42 = weak red, 84 = red, 127 = strong red) to USB-MIDI ports whose name contains “MPK”, never to a port named MIDI 2. AKAI’s MPK mini Plus User Guide v1.2 only documents colours stored in the program, not live feedback, so this has <b>not been verified on the hardware</b>. If the pads do not respond, set <code>pad_leds = off</code>. The Pi’s ACT LED still blinks the side number. <code>pad_leds = any</code> sends the same notes to every MIDI output except MIDI 2.")}
 {note("note", "A patch can store PWM from the envelope. The LFO/MAN pad only selects LFO or MAN: if the patch is on ENV the LED stays off, and the next press selects LFO. Loading the patch again brings ENV back. Voice mode, velocity, portamento, bender depths and MOD depth are not on the panel; they stay as set in <code>ju6.conf</code>. CC 7 is still the master volume, and a sustain pedal (CC 64) is still HOLD.")}
@@ -249,20 +247,13 @@ lydkort funnet: vc4hdmi0, vc4hdmi1, RPiDAC</pre>
 # ---------------- 6 PLAYING ----------------
 H.append(f'''<section class="page" id="s6">{sect(6, "Playing")}
 <h2>Keyboard</h2>
-<p>The keyboard plays on all MIDI channels (<code>key_channel = omni</code>); only the pad notes on the pad channel are reserved. <b>Velocity is off</b> by default, as on the original; switch it on with <code>velocity = on</code>. Use the MPK's OCT −/+ buttons to reach higher and lower octaves. Those buttons do not change DCO RANGE.</p>
+<p>The keyboard plays on all MIDI channels (<code>key_channel = omni</code>); only the pad notes on the pad channel are reserved. <b>Velocity is off</b> by default, as on the original; switch it on with <code>velocity = on</code>. Use the MPK's OCT −/+ buttons to reach higher and lower octaves. Those buttons do not change DCO RANGE. There is no transpose control on the panel: a key always plays.</p>
 <h2>BENDER (pitch wheel / joystick X)</h2>
 <p>Pitch Bend bends the DCO pitch by up to ±2 semitones (default <code>bender_dco = 0.25</code>) and, if set, the VCF cutoff (default <code>bender_vcf = 0</code>). The depths are set in <code>ju6.conf</code>.</p>
 <h2>MOD (mod wheel / CC 1)</h2>
 <p>MOD applies LFO vibrato to the DCO. Unlike the 106's spring-loaded lever with fixed depth, MOD here is <b>continuous</b>: the depth follows how far the wheel or joystick is pushed, scaled by <code>mod_depth</code> (default 0.5). The LFO runs in AUTO mode (it fades in after a key, using LFO DELAY on SIDE 2).</p>
 <h2>HOLD</h2>
 <p>A sustain pedal (CC 64) holds the notes while pressed. There is no HOLD pad on the two sides; CC 120 or 123 silences hung notes.</p>
-<h2>TRANSPOSE</h2>
-<ol class="steps">
-<li>Press and <b>hold pad 8</b> (bank B). This works on both sides.</li>
-<li>Press a key. That key becomes the new tonic: <b>C4 (middle C, note 60) = no transposition</b>; F4 gives +5 semitones, for example. The key itself does not sound.</li>
-<li>Release the pad. Pad 8 lights strong red while a transposition is active, and is unlit at zero.</li>
-</ol>
-<p>A <b>short press</b> (under 0.6 s, no key) on pad 8 does not clear the transposition. It steps to the next patch group (section 7). To clear a transposition, hold pad 8 and press middle C.</p>
 <h2>Voice modes</h2>
 <table class="grid">
 <tr><th>Mode</th><th><code>voice_mode</code></th><th>Description</th></tr>
@@ -279,16 +270,18 @@ H.append(f'''<section class="page" id="s6">{sect(6, "Playing")}
 H.append(f'''<section class="page" id="s7">{sect(7, "Selecting Patches")}
 <p>As on the 106, the 128 memories are organised as two <b>banks</b> (A and B), each with eight <b>groups</b> of eight <b>patches</b>: A11 … A88 and B11 … B88. The first digit is the group, the second the patch number.</p>
 <div class="fig-wrap">{pad_map()}</div>
-<p class="cap">Bank A recalls patches. Bank B is the panel in section 3. Pads 1–4 are the lower row. Pad 6 stays lit on SIDE 1; pad 2 stays lit on SIDE 2.</p>
-<h2>Selecting a patch</h2>
-<ol class="steps">
-<li>Press BANK A/B so the pads are in <b>bank B</b>.</li>
-<li>Short-press pad 8 (<b>GROUP +</b>) to step through the 16 groups A1 → A8 → B1 → B8 (it wraps round). The Pi LED blinks the group number (1–8) and the patch with the same number in the new group is selected. A short press does not clear TRANSPOSE.</li>
-<li>Press BANK A/B to return to <b>bank A</b>. Pad 2 and pad 6 keep showing the active side.</li>
-<li>Press pad 1–8 to select patch 1–8 in that group. The sound changes when the pad is released.</li>
-</ol>
-<p><b>Example:</b> from group A1, press GROUP + three times (A4), then bank A pad 8 → <b>A48 Synth Bass I</b>.</p>
-{note("note", "The Pi LED shows only the group number, not whether you are in bank A or B of the patches. There is no GROUP − pad; GROUP + wraps after B8.")}
+<p class="cap">Both MPK pad banks are this panel. Pad 5 steps forward one sound. Pad 1 steps back one sound. Pad 6 stays lit on SIDE 1; pad 2 stays lit on SIDE 2.</p>
+<h2>What a sound is</h2>
+<p>A sound is <b>one patch</b>, not a group of eight. The 128 memories stay numbered as on the 106 — two banks, eight groups, eight patches — but next and previous move a single step:</p>
+<table class="grid small">
+<tr><th>Slot</th><th>Name</th><th>Next</th><th>Previous</th></tr>
+<tr><td>0</td><td>A11</td><td>A12</td><td>B88</td></tr>
+<tr><td>7</td><td>A18</td><td>A21</td><td>A17</td></tr>
+<tr><td>63</td><td>A88</td><td>B11</td><td>A87</td></tr>
+<tr><td>127</td><td>B88</td><td>A11</td><td>B87</td></tr>
+</table>
+<p>The step crosses from patch 8 of a group into patch 1 of the next group, and from A88 into B11. It loads the stored patch and keeps the master volume. Knob edits that were not part of that memory are replaced. The Pi’s green LED does not blink for this; it blinks only for a side change (one blink = SIDE 1, two = SIDE 2).</p>
+<p><b>Example:</b> from A11, press NEXT seven times to reach A18, once more to reach A21. Thirty-nine presses from A11 reach A48 Synth Bass I. PREVIOUS from A11 lands on B88.</p>
 <h2>Program Change</h2>
 <p>MIDI Program Change 0–127 selects A11 … B88 directly (0 = A11, 63 = A88, 64 = B11, 127 = B88). The MPK can send program changes from its pads (pad Play Mode "ProgCh" in the MPK's program editor, per AKAI's guide).</p>
 <h2>SysEx</h2>
@@ -307,7 +300,7 @@ H.append(f'''<section class="page" id="s8">{sect(8, "Knobs and Takeover")}
 <tr><td>SIDE 1, K5 SUB</td><td>0 = sub off; 1–127 = sub level</td></tr>
 <tr><td>SIDE 2, K5 HPF</td><td>0–31 position 0 (bass boost) · 32–63 position 1 (flat) · 64–95 position 2 · 96–127 position 3</td></tr>
 </table>
-<p>Chorus, DCO range, pulse, saw, PWM source, VCA mode and envelope polarity are pads, not knobs (section 3).</p>
+<p>Chorus, pulse, saw, PWM source, VCA mode and envelope polarity are pads, not knobs (section 3). DCO RANGE is stored in the patch and has no panel control.</p>
 <h2>Knob behaviour</h2>
 <p>By default the knobs <b>jump</b>: the parameter takes the knob's value as soon as the knob is moved (<code>knob_takeover = jump</code>). With <code>knob_takeover = pickup</code> a knob does nothing until it passes the current value (soft takeover; this resets on every side or patch change). With <code>knob_mode = relative</code> JU-6 Pi reads the knobs as relative (two's complement: 1–63 = up, 65–127 = down). <span class="unv">NOT VERIFIED: that this matches the MPK mini Plus's own "Relative" knob mode.</span></p>
 </section>''')
@@ -318,7 +311,7 @@ H.append(f'''<section class="page" id="s9">{sect(9, "Creating Sounds")}
 <div class="fig-wrap">{signal_flow()}</div>
 <table class="grid small">
 <tr><th>Section</th><th>What it does</th><th>Where</th></tr>
-<tr><td><b>DCO</b></td><td>The sound source. Pulse (width set by PWM, from LFO or set manually), sawtooth, sub-oscillator one octave down, and noise are mixed. RANGE sets the octave; DCO LFO adds vibrato.</td><td>SIDE 2, plus SUB and NOISE on SIDE 1</td></tr>
+<tr><td><b>DCO</b></td><td>The sound source. Pulse (width set by PWM, from LFO or set manually), sawtooth, sub-oscillator one octave down, and noise are mixed. RANGE is the octave stored in the patch. DCO LFO adds vibrato.</td><td>SIDE 2, plus SUB and NOISE on SIDE 1</td></tr>
 <tr><td><b>VCF</b></td><td>Low-pass filter, 24 dB/octave. FREQ = cutoff, RES = resonance (self-oscillates near maximum), ENV = how much the envelope opens the filter, LFO = filter wobble, KYBD = cutoff follows the keyboard. Polarity is the SIDE 2 pad (red = inverted).</td><td>Both sides</td></tr>
 <tr><td><b>VCA</b></td><td>Loudness. ENV: follows the ADSR. GATE: full level while a key is held. LEVEL sets the patch volume (about −10 … +10 dB), in steps of 8 from the LEVEL pads.</td><td>SIDE 1 pads</td></tr>
 <tr><td><b>ENV</b></td><td>One ADSR envelope with Juno-106 curves: A = attack, D = decay, S = sustain level, R = release.</td><td>SIDE 1, K1–K4</td></tr>
@@ -334,40 +327,39 @@ H.append(f'''<section class="page" id="s9">{sect(9, "Creating Sounds")}
 H.append(f'''<section class="page">
 {tutorial("A48", "Tutorial 1 — Synth bass (A48 Synth Bass I)",
  "A punchy, mono-style bass made from a narrow pulse, a strong sub-oscillator and a short filter envelope.",
- ["SIDE 2, pad 5: press RANGE until the LED is weak red (16'). Pad 1: pulse on (red). Pad 3: saw off. Pad 7: LFO/MAN unlit (MAN). Knob PWM (K2) = 69 for a fairly narrow pulse. DCO LFO (K1) = 1.",
+ ["Recall A48 first (or step to it) so DCO RANGE is already 16'. SIDE 2: pad 3 pulse on (red), pad 4 saw off, pad 8 LFO/MAN unlit (MAN). Knob PWM (K2) = 69. DCO LFO (K1) = 1.",
   "SIDE 1: sub-oscillator K5 = 102 for weight, and a touch of NOISE (K6 = 50) for attack. Filter closed: FREQ 32, RES 0.",
   "SIDE 2: let the envelope open the filter (VCF ENV 66). KYBD 35. HPF position 0 (K5 = 16) for the bass boost. LFO RATE 58, DELAY 16, VCF LFO 0.",
-  "SIDE 1: envelope A = 0, D = 34, S = 0, R = 36 — a plucked shape with no sustain. CHORUS pad until the LED is off. ENV/GATE pad until it is red (ENV). LEVEL pads toward 75 (steps of 8; 72 or 80 is close).",
+  "SIDE 1: envelope A = 0, D = 34, S = 0, R = 36 — a plucked shape with no sustain. CHORUS (pad 8) until the LED is off. ENV/GATE (pad 4) until it is red (ENV). LEVEL pads (7 and 3) toward 75 (steps of 8; 72 or 80 is close).",
   "Play low on the keyboard. Try more RES or VCF ENV for a squelchier bass."])}
 </section>''')
 H.append(f'''<section class="page">
 {tutorial("B11", "Tutorial 2 — Strings (B11 Strings)",
  "A classic ensemble: pulse and saw together, slowly swept by the LFO, softened by the envelope and widened by chorus II.",
- ["SIDE 2, pad 5: RANGE until the LED is red (8'). Pad 1 and pad 3 both on (pulse and saw, both red). Pad 7: LFO/MAN red (LFO), PWM knob 67 — the LFO sweeps the pulse width. VCF KYBD 108. HPF position 0 (K5 = 16). LFO RATE 57, DELAY 45, VCF LFO 0. VCF ENV 0.",
+ ["Recall B11 first so RANGE is already 8'. SIDE 2: pad 3 and pad 4 both on (pulse and saw, both red). Pad 8: LFO/MAN red (LFO), PWM knob 67 — the LFO sweeps the pulse width. VCF KYBD 108. HPF position 0 (K5 = 16). LFO RATE 57, DELAY 45, VCF LFO 0. VCF ENV 0.",
   "SIDE 1: SUB 0 (off), NOISE 0. Open the filter fairly far (FREQ 85), RES 0 — the tone stays constant.",
-  "SIDE 1: slow envelope: A = 59, D = 32, S = 86, R = 40. CHORUS pad until the LED is red (II). Compare with weak red (I) and strong red (I+II).",
+  "SIDE 1: slow envelope: A = 59, D = 32, S = 86, R = 40. CHORUS (pad 8) until the LED is red (II). Compare with weak red (I) and strong red (I+II).",
   "ENV/GATE pad red (ENV). LEVEL pads toward 52.",
   "Play chords. Raise ENV A for slower bowing, or ENV R for longer tails."])}
 </section>''')
 H.append(f'''<section class="page">
 {tutorial("A11", "Tutorial 3 — Brass (A11 Brass)",
  "Synth brass relies on a sawtooth and a filter that opens with the envelope and settles back, giving the 'blat' of a horn attack.",
- ["SIDE 2, pad 5: RANGE until the LED is weak red (16'). Pad 3: saw on (red). Pad 1: pulse off. Pad 7 unlit (MAN); the PWM knob has no audible effect while the pulse is off. VCF KYBD 86. VCF ENV 58 — the envelope does the work. LFO RATE 20, DELAY 49, VCF LFO 0. HPF position 1 = flat (K5 = 48).",
+ ["Recall A11 first so RANGE is already 16'. SIDE 2: pad 4 saw on (red), pad 3 pulse off, pad 8 unlit (MAN). The PWM knob has no audible effect while the pulse is off. VCF KYBD 86. VCF ENV 58 — the envelope does the work. LFO RATE 20, DELAY 49, VCF LFO 0. HPF position 1 = flat (K5 = 48).",
   "SIDE 1: SUB 0, NOISE 0. FREQ 35, RES 13. Envelope A = 3, D = 49, S = 45, R = 32: fast attack, the filter falls back to a sustained level.",
-  "CHORUS pad until the LED is weak red (I). ENV/GATE red (ENV). LEVEL pads toward 108.",
+  "CHORUS (pad 8) until the LED is weak red (I). ENV/GATE (pad 4) red (ENV). LEVEL pads toward 108.",
   "Use the mod wheel for vibrato on held notes. For a slower swell, raise ENV A to about 60."])}
 </section>''')
 
 # ---------------- 10 WRITING ----------------
 H.append(f'''<section class="page" id="s10">{sect(10, "Writing (Saving) Patches")}
-<p>As implemented in v1.1.1, the write procedure is:</p>
+<p>The two-page panel does not write patches. Next and previous load the stored sound; they do not keep unsaved knob edits in the memory you just left. A file already on the card is still read at power-up. In 1.1.1 a held bank-A pad wrote the edited sound; that gesture is gone.</p>
 <ol class="steps">
-<li>Edit the sound with the knobs until you like it.</li>
-<li>Select the target group with GROUP + (bank B, pad 8). Each short press moves one group forward and wraps after B8.</li>
-<li>Switch the pads to bank A and <b>hold</b> the pad of the target patch number for <b>1.5 seconds</b> (<code>save_hold_seconds</code>).</li>
-<li>The LED blinks rapidly to confirm. The memory is written to <code>ju6/patches.syx</code> and named "<i>A15 Egen</i>" ("Egen" = user) in <code>ju6/names.txt</code>.</li>
+<li>Edit the sound with the knobs and pads.</li>
+<li>To hear a stored memory again, step to it with pad 5 or pad 1, or send Program Change.</li>
+<li>Stepping away replaces the edit with the stored patch. The master volume stays where it was.</li>
 </ol>
-{note("note", "<b>Fixed in v1.1.1.</b> A bank-A pad now recalls its patch on <i>release</i> of a short press, not when it is pressed. Holding the pad therefore writes the sound exactly as you have edited it, and releasing after the write does not reload anything. In v1.1.0 the stored patch was recalled on press, so edits were lost; update the SD card to v1.1.1.")}
+{note("note", "1.1.1 wrote a patch when a bank-A pad was held. 1.2.0 does not. <code>patches.syx</code> on the card is still loaded if it is there; deleting it restores the factory sounds.")}
 <h2>Patch files on the JU6DATA partition</h2>
 <table class="grid small">
 <tr><th>File</th><th>Contents</th></tr>
@@ -444,7 +436,7 @@ conf = [("audio_output", "auto", "auto, dacplus, hdmi, usb or null (section 11)"
 ("mod_cc", "1", "CCs that drive MOD (several may be listed)"),
 ("knob_mode", "absolute", "or relative"),
 ("knob_takeover", "jump", "or pickup"),
-("save_hold_seconds", "1.5", "how long a bank-A pad is held to write"),
+("save_hold_seconds", "1.5", "ignored in 1.2.0; the panel does not write patches"),
 ("pad_leds", "on", "on = MPK pad LEDs, any = every MIDI out except MIDI 2, off = none")]
 H.append(f'''<section class="page" id="s12">{sect(12, "Settings File (ju6.conf)")}
 <p>All settings live in <code>ju6/ju6.conf</code> on the <b>JU6DATA</b> partition (FAT, 256 MB), which any computer can read. Every line is commented out; remove the <code>#</code> in front of a line and change the value. No recompiling is needed — the new settings apply at the next power-up.</p>
@@ -467,11 +459,14 @@ H.append(f'''<section class="page" id="s13">{sect(13, "MIDI Implementation")}
 <table class="grid small">
 <tr><th>Message</th><th>Channel</th><th>Function</th></tr>
 <tr><td>Note On / Off</td><td>omni (or <code>key_channel</code>)</td><td>play; velocity used only when VELOCITY is on</td></tr>
-<tr><td>Note 36–43</td><td>10</td><td>pad bank A: patch 1–8 (hold 1.5 s = write). Notes 37 and 41 are also used as LED feedback for pad 2 and pad 6</td></tr>
-<tr><td>Note 44 / 46 / 47</td><td>10</td><td>bank B pads 1 / 3 / 4: SIDE 1 = LEVEL −, ENV/GATE, (unused). SIDE 2 = pulse, saw, ENV polarity</td></tr>
-<tr><td>Note 45 / 49</td><td>10</td><td>bank B pad 2 = SIDE 2, pad 6 = SIDE 1. The active pad is sent back at velocity 127; the other at velocity 0. The same pair is sent on notes 37 and 41</td></tr>
-<tr><td>Note 48 / 50</td><td>10</td><td>bank B pad 5 / 7: SIDE 1 = LEVEL + / CHORUS. SIDE 2 = RANGE / LFO·MAN</td></tr>
-<tr><td>Note 51</td><td>10</td><td>bank B pad 8: short press = GROUP +; hold + key = TRANSPOSE</td></tr>
+<tr><td>Notes 36 and 44</td><td>10</td><td>pad 1, both banks: previous sound (−1, wraps)</td></tr>
+<tr><td>Notes 37 and 45</td><td>10</td><td>pad 2: SIDE 2. LED velocity 127 when that side is active, otherwise 0. Sent for both banks</td></tr>
+<tr><td>Notes 38 and 46</td><td>10</td><td>pad 3: SIDE 1 = VCA LEVEL −; SIDE 2 = pulse on/off</td></tr>
+<tr><td>Notes 39 and 47</td><td>10</td><td>pad 4: SIDE 1 = ENV/GATE; SIDE 2 = saw on/off</td></tr>
+<tr><td>Notes 40 and 48</td><td>10</td><td>pad 5, both banks: next sound (+1, wraps)</td></tr>
+<tr><td>Notes 41 and 49</td><td>10</td><td>pad 6: SIDE 1. LED velocity 127 when that side is active, otherwise 0</td></tr>
+<tr><td>Notes 42 and 50</td><td>10</td><td>pad 7: SIDE 1 = VCA LEVEL +; SIDE 2 = VCF polarity</td></tr>
+<tr><td>Notes 43 and 51</td><td>10</td><td>pad 8: SIDE 1 = CHORUS cycle; SIDE 2 = PWM LFO/MAN</td></tr>
 <tr><td>Pitch Bend</td><td>any</td><td>BENDER (DCO and VCF depth)</td></tr>
 <tr><td>CC 1 (and other <code>mod_cc</code>)</td><td>any</td><td>MOD (LFO depth on the DCO)</td></tr>
 <tr><td>CC 7</td><td>any</td><td>master volume</td></tr>
@@ -483,7 +478,7 @@ H.append(f'''<section class="page" id="s13">{sect(13, "MIDI Implementation")}
 <tr><td>SysEx <code>F0 41 30 0n pp …F7</code></td><td>—</td><td>Juno-106 patch (APR) into the current sound</td></tr>
 <tr><td>SysEx <code>F0 41 32 0n cc vv F7</code></td><td>—</td><td>Juno-106 single parameter (IPR)</td></tr>
 </table>
-<p class="cap">Pad notes are recognised only on the pad channel; notes on other channels (and pad-channel notes that are not pad notes) play the synth. With <code>pad_leds = on</code> (the default) JU-6 Pi transmits Note On/Off for the bank-B pad notes, and also for bank-A notes 37 and 41 so the page pads stay visible on either bank. Velocity 0 is Note Off. An echo of those notes is ignored for about 80 ms. NOT VERIFIED on an MPK mini Plus.</p>
+<p class="cap">Pad notes are recognised only on the pad channel; notes on other channels (and pad-channel notes that are not pad notes) play the synth. With <code>pad_leds = on</code> (the default) JU-6 Pi transmits Note On/Off for every pad on both banks, so the LEDs match the side whichever bank the MPK is showing. Velocity 0 is Note Off. An echo of those notes is ignored for about 80 ms. NOT VERIFIED on an MPK mini Plus.</p>
 <h2>Patch data format</h2>
 <p>Each patch is 18 bytes, as in the Juno-106 APR message: 16 slider values (0–127) in the order LFO RATE, LFO DELAY, DCO LFO, DCO PWM, DCO NOISE, VCF FREQ, VCF RES, VCF ENV, VCF LFO, VCF KYBD, VCA LEVEL, ENV A, ENV D, ENV S, ENV R, DCO SUB, followed by two switch bytes:</p>
 <ul><li><b>SW1:</b> bits 0–2 = range 16'/8'/4'; bit 3 = pulse; bit 4 = saw; bit 5 = chorus off (0 = on); bit 6 = chorus I (0 = II).</li>
@@ -495,20 +490,19 @@ chart = [("ENV A", "1", "K1", "CC 70", "0–127", "slider 12"), ("ENV D", "1", "
 ("ENV S", "1", "K3", "CC 72", "0–127", "slider 14"), ("ENV R", "1", "K4", "CC 73", "0–127", "slider 15"),
 ("DCO SUB", "1", "K5", "CC 74", "0 = off, 1–127", "slider 16"), ("DCO NOISE", "1", "K6", "CC 75", "0–127", "slider 5"),
 ("VCF FREQ", "1", "K7", "CC 76", "0–127", "slider 6"), ("VCF RES", "1", "K8", "CC 77", "0–127", "slider 7"),
-("VCA LEVEL +/−", "1", "pads 5 / 1", "note 48 / 44", "steps of 8, 0–127", "slider 11"),
-("CHORUS", "1", "pad 7", "note 50", "off · I · II · I+II", "SW1 b5, b6 (+ ext b0)"),
-("VCA ENV/GATE", "1", "pad 3", "note 46", "ENV · GATE", "SW2 b2"),
+("VCA LEVEL +/−", "1", "pads 7 / 3", "notes 50 / 46", "steps of 8, 0–127", "slider 11"),
+("CHORUS", "1", "pad 8", "note 51", "off · I · II · I+II", "SW1 b5, b6 (+ ext b0)"),
+("VCA ENV/GATE", "1", "pad 4", "note 47", "ENV · GATE", "SW2 b2"),
+("NEXT / PREVIOUS", "both", "pads 5 / 1", "notes 48 / 44", "one patch, wraps 0–127", "selects a memory"),
 ("DCO LFO", "2", "K1", "CC 70", "0–127", "slider 3"), ("DCO PWM", "2", "K2", "CC 71", "0–127", "slider 4 (0–105 in 106 format)"),
 ("LFO RATE", "2", "K3", "CC 72", "0–127", "slider 1"), ("LFO DELAY", "2", "K4", "CC 73", "0–127", "slider 2"),
 ("HPF", "2", "K5", "CC 74", "0 · 1 · 2 · 3", "SW2 b3–4"), ("VCF ENV", "2", "K6", "CC 75", "0–127", "slider 8"),
 ("VCF LFO", "2", "K7", "CC 76", "0–127", "slider 9"), ("VCF KYBD", "2", "K8", "CC 77", "0–127", "slider 10"),
-("DCO RANGE", "2", "pad 5", "note 48", "16' · 8' · 4'", "SW1 b0–2"),
-("PULSE", "2", "pad 1", "note 44", "on · off", "SW1 b3"), ("SAW", "2", "pad 3", "note 46", "on · off", "SW1 b4"),
-("PWM LFO/MAN", "2", "pad 7", "note 50", "LFO · MAN", "SW2 b0 (+ ext b1 for ENV)"),
-("VCF ENV polarity", "2", "pad 4", "note 47", "+ · − (red = −)", "SW2 b1"),
-("SIDE 1 / SIDE 2", "both", "pad 6 / pad 2", "note 49 / 45", "active pad strong red, the other off", "not stored"),
-("GROUP +", "both", "pad 8 short", "note 51", "next group, wraps", "not stored"),
-("TRANSPOSE", "both", "pad 8 hold + key", "note 51", "key − 60 semitones", "not stored")]
+("PULSE", "2", "pad 3", "note 46", "on · off", "SW1 b3"), ("SAW", "2", "pad 4", "note 47", "on · off", "SW1 b4"),
+("PWM LFO/MAN", "2", "pad 8", "note 51", "LFO · MAN", "SW2 b0 (+ ext b1 for ENV)"),
+("VCF polarity", "2", "pad 7", "note 50", "on = inverted, off = normal", "SW2 b1"),
+("DCO RANGE", "—", "—", "—", "16' · 8' · 4', from the patch", "SW1 b0–2"),
+("SIDE 1 / SIDE 2", "both", "pad 6 / pad 2", "notes 49 / 45", "active pad strong red, the other off", "not stored")]
 H.append(f'''<section class="page" id="s14">{sect(14, "Parameter Chart")}
 <table class="grid tiny chart"><tr><th>Parameter</th><th>Side</th><th>Control</th><th>MIDI</th><th>Range / positions</th><th>Stored in patch</th></tr>
 {"".join(f"<tr><td><b>{a}</b></td><td class='c'>{p}</td><td class='c'>{k}</td><td>{m}</td><td>{r}</td><td>{s}</td></tr>" for a, p, k, m, r, s in chart)}
@@ -519,7 +513,7 @@ H.append(f'''<section class="page" id="s14">{sect(14, "Parameter Chart")}
 <tr><td class="blank"></td>{"<td></td>"*8}</tr>
 <tr><th></th><th colspan="8">SIDE 2 knobs: DCO LFO · PWM · LFO RATE · DELAY · HPF · VCF ENV · VCF LFO · KYBD</th></tr>
 <tr><td class="blank"></td>{"<td></td>"*8}</tr>
-<tr><th></th><th colspan="8">Pads: LEVEL · CHORUS · ENV/GATE · RANGE · PULSE · SAW · LFO/MAN · POLARITY</th></tr>
+<tr><th></th><th colspan="8">Pads: NEXT · PREV · LEVEL · CHORUS · ENV/GATE · PULSE · SAW · LFO/MAN · POLARITY</th></tr>
 <tr><td class="blank"></td>{"<td></td>"*8}</tr></table>
 <p class="cap">Copy this sheet to note down your own sounds.</p>
 </section>''')
@@ -532,7 +526,7 @@ def bank_table(letter):
         rows += f"<tr><th>{letter}{g}x</th>{cells}</tr>"
     return f'<table class="grid tiny patches"><tr><th>Bank {letter}</th>' + "".join(f"<th>{i}</th>" for i in range(1, 9)) + f"</tr>{rows}</table>"
 H.append(f'''<section class="page" id="s15">{sect(15, "Patch List")}
-<p>Banks A and B contain the Juno-106 factory patches as provided by the KR-106 project (parameter values, not samples), in exact 106 format (<code>patches/factory_106.syx</code>). Columns = patch number (pad 1–8), rows = group.</p>
+<p>Banks A and B contain the Juno-106 factory patches as provided by the KR-106 project (parameter values, not samples), in exact 106 format (<code>patches/factory_106.syx</code>). Columns are the patch number inside the group. Reach a row by stepping one sound at a time (section 7) or with Program Change.</p>
 {bank_table("A")}{bank_table("B")}
 <p class="cap">Names from <code>src/factory_bank.h</code>. Memories you write are renamed "<i>xNN Egen</i>".</p>
 </section>''')
@@ -549,14 +543,14 @@ H.append(f'''<section class="page" id="s16">{sect(16, "Troubleshooting")}
 <tr><td>Knobs have no effect until turned past a point</td><td><code>knob_takeover = pickup</code> is set — this is soft takeover.</td></tr>
 <tr><td>Noticeable delay with a TV or AV receiver</td><td>Select Game/Direct/Pure mode, or use a DAC+ or HDMI audio extractor.</td></tr>
 <tr><td>Clicks or drop-outs</td><td>The buffer grows automatically after repeated underruns; you can also set <code>buffer = 512x2</code>.</td></tr>
-<tr><td>Everything sounds transposed</td><td>TRANSPOSE active (pad 8 lit): hold pad 8 (bank B) and press middle C.</td></tr>
+<tr><td>The octave is wrong for this patch</td><td>DCO RANGE is stored in the patch and is not on the panel. Step to another sound, or load a SysEx patch with the range you want. OCT −/+ only shifts the MPK keyboard.</td></tr>
 <tr><td>Notes hang</td><td>Release the sustain pedal, or send CC 123 (all notes off).</td></tr>
 <tr><td>Pad LEDs do not show the side</td><td>Set <code>pad_leds = on</code> (default). The MPK must appear as a USB-MIDI port with “MPK” in the name. NOT VERIFIED on hardware; the Pi LED still blinks once for SIDE 1 and twice for SIDE 2. <code>pad_leds = off</code> stops the messages.</td></tr>
 <tr><td>An edited sound was not kept after writing</td><td>Fixed in v1.1.1 (section 10); update the SD card.</td></tr>
 <tr><td>Want factory sounds back</td><td>Delete <code>patches.syx</code> and <code>names.txt</code> on JU6DATA.</td></tr>
 </table>
 <h2>With a screen and keyboard on the Pi</h2>
-<p><code>ju6pi list</code> (patch names), <code>ju6pi bench</code> (CPU margin), <code>ju6pi demo DIR</code> (render WAV examples), <code>ju6pi utganger</code> (sound cards and chosen output), <code>ju6pi selftest</code> (MPK mapping, writing, transpose, SysEx, output selection), <code>journalctl -u ju6pi</code> (log). <code>aplay -l</code> should list <code>RPiDAC [RPi DAC+]</code> when the DAC+ is fitted.</p>
+<p><code>ju6pi list</code> (patch names), <code>ju6pi bench</code> (CPU margin), <code>ju6pi demo DIR</code> (render WAV examples), <code>ju6pi utganger</code> (sound cards and chosen output), <code>ju6pi selftest</code> (MPK mapping, sound step, SysEx, output selection), <code>journalctl -u ju6pi</code> (log). <code>aplay -l</code> should list <code>RPiDAC [RPi DAC+]</code> when the DAC+ is fitted.</p>
 </section>''')
 
 # ---------------- 17 SPECS ----------------
@@ -590,7 +584,7 @@ H.append(f'''<section class="page" id="s18">{sect(18, "Sources and Credits")}
 <h2>What this manual is based on</h2>
 <table class="grid small">
 <tr><th>Topic</th><th>Source (repository OleBee/juno106-pi, v1.2.0)</th></tr>
-<tr><td>Two sides, pad functions, page LEDs, CC/notes, write, transpose, Program Change</td><td><code>src/controller.h</code>, <code>src/midi_out.cpp</code></td></tr>
+<tr><td>Two sides, pad functions, page LEDs, next/previous sound, Program Change</td><td><code>src/controller.h</code>, <code>src/midi_out.cpp</code></td></tr>
 <tr><td>Parameter scaling, patch format, MOD/bender, transpose key</td><td><code>src/synth.h</code>, <code>third_party/kr106/DSP/KR106SysEx.h</code>, <code>KR106_DSP_SetParam.h</code>, <code>KR106_HPF.h</code>, <code>KR106LFO.h</code></td></tr>
 <tr><td>Defaults, LED, ready tones, status file, oversampling, buffer step-up</td><td><code>src/main.cpp</code>, <code>image/data/ju6.conf</code></td></tr>
 <tr><td>Audio outputs, DAC+ detection, buffer tables</td><td><code>src/audio_out.h</code>, <code>image/boot/dacplus.blokk</code></td></tr>

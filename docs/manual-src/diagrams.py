@@ -151,15 +151,16 @@ def _pad_grid(x0, title, labels, sub, color, y_title=22):
 
 def pad_map():
     """Bank A (patches) beside a reminder that bank B is the two-page panel."""
-    A = [(f"x{i}", "short = recall") for i in range(1, 9)]
-    b = _pad_grid(10, "PAD BANK A  ·  patches", A, "notes 36–43 on ch. 10 · hold 1.5 s = WRITE", "#4a4a4a")
-    b += f'<text x="470" y="40" font-size="14" font-weight="bold" fill="{INK}">PAD BANK B</text>'
-    b += f'<text x="470" y="62" font-size="11" fill="{INK}">The two panel sides (section 3).</text>'
+    A = [("PREV −1", "sound"), ("SIDE 2", "page"), ("LEVEL −", "or pulse"), ("GATE", "or saw"),
+         ("NEXT +1", "sound"), ("SIDE 1", "page"), ("LEVEL +", "or polarity"), ("CHORUS", "or LFO/MAN")]
+    b = _pad_grid(10, "PADS  ·  both banks", A, "the job of pads 3, 4, 7 and 8 changes with the side", "#4a4a4a")
+    b += f'<text x="470" y="40" font-size="14" font-weight="bold" fill="{INK}">BOTH PAD BANKS</text>'
+    b += f'<text x="470" y="62" font-size="11" fill="{INK}">Bank A and bank B do the same panel.</text>'
     b += f'<text x="470" y="82" font-size="11" fill="{INK}">Pad 6 selects SIDE 1. Pad 2 selects SIDE 2.</text>'
     b += f'<text x="470" y="102" font-size="11" fill="{INK}">The active side’s pad stays lit;</text>'
     b += f'<text x="470" y="118" font-size="11" fill="{INK}">the other page pad stays off.</text>'
-    b += f'<text x="470" y="146" font-size="11" fill="{GREY}">Notes 44–51 on channel 10.</text>'
-    b += f'<text x="470" y="164" font-size="11" fill="{GREY}">Pads 1–4 are the lower row.</text>'
+    b += f'<text x="470" y="146" font-size="11" fill="{INK}">Pad 5 = next sound. Pad 1 = previous.</text>'
+    b += f'<text x="470" y="164" font-size="11" fill="{GREY}">One sound = one patch, slots 0–127.</text>'
     return svg(900, 250, b, "fig")
 
 def side_pads(title, labels, sub):

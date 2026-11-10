@@ -1,10 +1,10 @@
 // JU-6 Pi – oversetter MIDI fra AKAI MPK Mini Plus (eller annen kontroller) til synth-handlinger.
 // Kjører i lydtråden; alt som må til disk eller ut på MIDI sendes som forespørsler til kontrolltråden.
 //
-// To sider (eierens skisse, 2026). Pad 6 (øverste rad) = SIDE 1, pad 2 (rett under) = SIDE 2.
-// Skissen navngir begge som sidebyttere og tegner SIDE 1 over SIDE 2; den sier ikke eksplisitt
-// hvilken av de to som er hvilken, så øverste pad følger øverste side.
-// Pad-bank A er uendret (patchvalg og lagring). Pad-bank B er panelet.
+// To sider, slik den rene skissen (2026-11-10) viser dem.
+// Pad 6 = SIDE 1, pad 2 = SIDE 2. Aktiv side-pad lyser sterkt rødt, den andre er slukket.
+// Pad 5 = neste lyd (+1), pad 1 = forrige lyd (−1). En «lyd» er én patch (spor 0–127, A11…B88).
+// Begge pad-banker gjør det samme, så BANK A/B på MPK ikke endrer oppsettet.
 #pragma once
 #include "util.h"
 #include "synth.h"
@@ -80,30 +80,27 @@ static const KnobDef kPages[2][8] = {
 };
 
 // Pad-funksjon per side. Indeks 0 = pad 1 (nederst til venstre) … 7 = pad 8.
-// Pad 2 og pad 6 bytter side på begge sider. Pad 8 er gruppe+ (kort) og transpose (hold + tangent).
 enum PadFn : uint8_t {
   pfNone = 0,
   pfSide1, pfSide2,
   pfLevelUp, pfLevelDown, pfChorus, pfVcaMode,
-  pfRange, pfPwm, pfPulse, pfSaw, pfEnvPol,
-  pfGroupTranspose
+  pfPwm, pfPulse, pfSaw, pfEnvPol,
+  pfSoundNext, pfSoundPrev
 };
 
-// SIDE 1: 5 LEVEL+, 6 SIDE 1, 7 CHORUS, 8 GRUPPE/TRANSPOSE
-//         1 LEVEL−, 2 SIDE 2, 3 ENV/GATE, 4 ubrukt
-// SIDE 2: 5 RANGE,  6 SIDE 1, 7 LFO/MAN, 8 GRUPPE/TRANSPOSE
-//         1 PULS,   2 SIDE 2, 3 SAG,      4 VCF ENV-polaritet
-// RANGE er padden skissen lot stå uten navn (eierens avgjørelse 2026-11-09).
+// SIDE 1: 5 NESTE, 6 SIDE 1, 7 LEVEL+, 8 CHORUS
+//         1 FORRIGE, 2 SIDE 2, 3 LEVEL−, 4 ENV/GATE
+// SIDE 2: 5 NESTE, 6 SIDE 1, 7 VCF-polaritet, 8 LFO/MAN
+//         1 FORRIGE, 2 SIDE 2, 3 PULS, 4 SAG
 static const PadFn kPadFn[2][8] = {
-  { pfLevelDown, pfSide2, pfVcaMode, pfNone, pfLevelUp, pfSide1, pfChorus, pfGroupTranspose },
-  { pfPulse, pfSide2, pfSaw, pfEnvPol, pfRange, pfSide1, pfPwm, pfGroupTranspose },
+  { pfSoundPrev, pfSide2, pfLevelDown, pfVcaMode, pfSoundNext, pfSide1, pfLevelUp, pfChorus },
+  { pfSoundPrev, pfSide2, pfPulse, pfSaw, pfSoundNext, pfSide1, pfEnvPol, pfPwm },
 };
 
 class Controller {
 public:
   Controller(Synth& s, Bank& b, RequestQueue& rq, const ControllerConfig& cfg)
     : mS(s), mB(b), mRq(rq), mCfg(cfg) {
-    for (auto& t : mPadDown) t = -1.0;
     for (auto& v : mLastKnob) v = -1;
     for (auto& v : mLastLed) v = -1;
   }
@@ -124,7 +121,6 @@ public:
 
   void selectSlot(int slot, bool notify = true) {
     mSlot = std::clamp(slot, 0, 127);
-    mBankB = mSlot >= 64; mGroup = (mSlot % 64) / 8; mNumber = mSlot % 8;
     float vol = mS.get(kMasterVol);
     mS.loadPatch(mB.patch[mSlot]);
     mS.set(kMasterVol, vol);
@@ -141,11 +137,8 @@ public:
         int pad = padIndex(e);
         if (pad >= 0) { padEvent(pad, e.type == MidiEvent::NoteOn, t); flushLeds(); return; }
         if (mCfg.keyChannel >= 0 && e.ch != mCfg.keyChannel) return;
-        if (e.type == MidiEvent::NoteOn) {
-          float before = mS.get(kTransposeOffset);
-          mS.noteOn(e.d1, e.d2);
-          if (mS.get(kTransposeOffset) != before) { mLedDirty = true; flushLeds(); }
-        } else mS.noteOff(e.d1);
+        if (e.type == MidiEvent::NoteOn) mS.noteOn(e.d1, e.d2);
+        else mS.noteOff(e.d1);
         return;
       }
       case MidiEvent::CC: {
@@ -165,19 +158,8 @@ public:
     }
   }
 
-  // Kalles hvert lydblokk: lange pad-trykk (lagring) og gjentakelse av LEVEL +/−.
+  // Kalles hvert lydblokk: gjentakelse av LEVEL +/−.
   void tick(double t) {
-    for (int i = 0; i < 8; i++) {
-      if (mPadDown[i] >= 0 && !mSaved[i] && t - mPadDown[i] >= mCfg.saveHoldSec) {
-        mSaved[i] = true;
-        int slot = (mBankB ? 64 : 0) + mGroup * 8 + i;
-        Request r{}; r.type = Request::SavePatch; r.a = slot; r.patch = mS.capturePatch();
-        mB.patch[slot] = r.patch;
-        mSlot = slot; mNumber = i;
-        mRq.push(r);
-        { Request c{}; c.type = Request::CurrentSlot; c.a = slot; mRq.push(c); }
-      }
-    }
     if (mLevelPad >= 0 && t >= mLevelNext) {
       nudgeLevel(mLevelDir);
       mLevelNext = t + 0.09;
@@ -194,8 +176,7 @@ private:
   int padIndex(const MidiEvent& e) const {
     if (e.ch != mCfg.padChannel) return -1;
     for (int i = 0; i < 8; i++) {
-      if (mCfg.padA[i] == e.d1) return i;
-      if (mCfg.padB[i] == e.d1) return 8 + i;
+      if (mCfg.padA[i] == e.d1 || mCfg.padB[i] == e.d1) return i;
     }
     return -1;
   }
@@ -224,11 +205,12 @@ private:
     mS.set(kChorusOff, m == 0 ? 1.f : 0.f);
   }
 
-  void cycleRange() {
-    int o = (int)std::lround(mS.get(kOctTranspose));
-    o = (o + 1) % 3;
-    if (o < 0) o += 3;
-    mS.set(kOctTranspose, (float)o);
+  // Én lyd = ett patchminne, spor 0–127 (A11 … B88). +1/−1 går over gruppe- og bankgrenser.
+  void stepSound(int dir) {
+    int slot = mSlot + dir;
+    if (slot > 127) slot = 0;
+    if (slot < 0) slot = 127;
+    selectSlot(slot);
   }
 
   void toggleFloat(int param) {
@@ -247,50 +229,25 @@ private:
     mS.set(kVcaMode, m == 0 ? 1.f : 0.f);
   }
 
-  void groupPlus() {
-    int g = (mBankB ? 8 : 0) + mGroup + 1;
-    g %= 16;
-    mBankB = g >= 8; mGroup = g % 8;
-    selectSlot((mBankB ? 64 : 0) + mGroup * 8 + mNumber);
-    blink(mGroup + 1);
-  }
-
   void padEvent(int pad, bool down, double t) {
-    if (pad < 8) {                                   // Pad-bank A: patchnummer 1–8
-      if (down) { mPadDown[pad] = t; mSaved[pad] = false; }
-      else {
-        if (mPadDown[pad] >= 0 && !mSaved[pad]) selectSlot((mBankB ? 64 : 0) + mGroup * 8 + pad);
-        mPadDown[pad] = -1.0;
-      }
-      return;
-    }
-    int f = pad - 8;
-    PadFn fn = kPadFn[mPage][f];
+    PadFn fn = kPadFn[mPage][pad];
     if (!down) {
-      if (fn == pfGroupTranspose) {
-        mS.armTranspose(false);
-        bool changed = mS.get(kTransposeOffset) != mTransposeBefore;
-        if (!changed && t - mTransposeDownAt < 0.6) groupPlus();
-        mS.set(kTranspose, mS.get(kTransposeOffset) != 0.f ? 1.f : 0.f);
-        mLedDirty = true;
-      }
-      if (mLevelPad == f) mLevelPad = -1;
+      if (mLevelPad == pad) mLevelPad = -1;
       return;
     }
     switch (fn) {
       case pfSide1: setPage(0); break;
       case pfSide2: setPage(1); break;
-      case pfLevelUp: nudgeLevel(+1); mLevelPad = f; mLevelDir = +1; mLevelNext = t + 0.40; break;
-      case pfLevelDown: nudgeLevel(-1); mLevelPad = f; mLevelDir = -1; mLevelNext = t + 0.40; break;
+      case pfLevelUp: nudgeLevel(+1); mLevelPad = pad; mLevelDir = +1; mLevelNext = t + 0.40; break;
+      case pfLevelDown: nudgeLevel(-1); mLevelPad = pad; mLevelDir = -1; mLevelNext = t + 0.40; break;
       case pfChorus: cycleChorus(); break;
       case pfVcaMode: toggleVca(); break;
-      case pfRange: cycleRange(); break;
       case pfPwm: togglePwm(); break;
       case pfPulse: toggleFloat(kDcoPulse); break;
       case pfSaw: toggleFloat(kDcoSaw); break;
       case pfEnvPol: toggleFloat(kVcfEnvInv); break;
-      case pfGroupTranspose:
-        mTransposeDownAt = t; mTransposeBefore = mS.get(kTransposeOffset); mS.armTranspose(true); break;
+      case pfSoundNext: stepSound(+1); break;
+      case pfSoundPrev: stepSound(-1); break;
       case pfNone: break;
     }
     mLedDirty = true;
@@ -308,15 +265,12 @@ private:
         return m == 0 ? kLedOff : m == 1 ? kLedWeak : m == 2 ? kLedRed : kLedStrong;
       }
       case pfVcaMode: return onOff((int)std::lround(mS.get(kVcaMode)) == 0);   // rød = ENV
-      case pfRange: {
-        int o = std::clamp((int)std::lround(mS.get(kOctTranspose)), 0, 2);
-        return o == 0 ? kLedWeak : o == 1 ? kLedRed : kLedStrong;             // 16' / 8' / 4'
-      }
       case pfPwm: return onOff((int)std::lround(mS.get(kPwmMode)) == 0);       // rød = LFO
       case pfPulse: return onOff(mS.get(kDcoPulse) > 0.5f);
       case pfSaw: return onOff(mS.get(kDcoSaw) > 0.5f);
-      case pfEnvPol: return onOff(mS.get(kVcfEnvInv) > 0.5f);                  // rød = invertert
-      case pfGroupTranspose: return mS.get(kTransposeOffset) != 0.f ? kLedStrong : kLedOff;
+      case pfEnvPol: return onOff(mS.get(kVcfEnvInv) > 0.5f);                  // på = rød = invertert
+      case pfSoundNext:
+      case pfSoundPrev:
       case pfNone: return kLedOff;
     }
     return kLedOff;
@@ -335,9 +289,7 @@ private:
         mRq.push(r);
       };
       push(mCfg.padB[i]);
-      // Side-padene skal vise aktiv side uansett om MPK står i bank A eller B.
-      bool pagePad = kPadFn[0][i] == pfSide1 || kPadFn[0][i] == pfSide2;
-      if (pagePad && mCfg.padA[i] != mCfg.padB[i]) push(mCfg.padA[i]);
+      if (mCfg.padA[i] != mCfg.padB[i]) push(mCfg.padA[i]);
     }
   }
 
@@ -377,11 +329,8 @@ private:
   void resetPickup() { for (int k = 0; k < 8; k++) mPicked[k] = false; }
 
   Synth& mS; Bank& mB; RequestQueue& mRq; ControllerConfig mCfg;
-  int mPage = 0, mSlot = 0, mGroup = 0, mNumber = 0;
-  bool mBankB = false;
-  double mPadDown[8]; bool mSaved[8] = {};
+  int mPage = 0, mSlot = 0;
   int mLastKnob[8]; bool mPicked[8] = {};
-  double mTransposeDownAt = 0; float mTransposeBefore = 0.f;
   int mLevelPad = -1, mLevelDir = 0; double mLevelNext = 0;
   bool mEmitLeds = true, mLedDirty = true;
   int mLastLed[8];
