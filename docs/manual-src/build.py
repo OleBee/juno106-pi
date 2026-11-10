@@ -162,7 +162,7 @@ H.append(f'''<section class="page">
 <table class="grid small">
 <tr><th>Pad</th><th>SIDE 1</th><th>SIDE 2</th></tr>
 <tr><td>6 / 2</td><td colspan="2">The active side is <b>strong red</b>. The other page pad is <b>off</b>. This pair is updated on every page change and is sent for both pad banks.</td></tr>
-<tr><td>5 and 1</td><td colspan="2"><b>Next sound</b> (pad 5) and <b>previous sound</b> (pad 1). One patch per press, wrapping through all 128. The LEDs stay off. Both sides.</td></tr>
+<tr><td>5 and 1</td><td colspan="2"><b>Next sound</b> (pad 5) and <b>previous sound</b> (pad 1), on both sides. One patch per press, wrapping through all 128. Their LEDs are a <b>position lamp</b>, not an on/off state: slots 0–31 (A11–A48) off, 32–63 (A51–A88) weak red, 64–95 (B11–B48) red, 96–127 (B51–B88) strong red. The lamp updates when the sound changes (these pads, Program Change, or power-up). Strong red here means “late in the list”, not “this control is on” and not the page indicator (that is pads 2 and 6). Chorus on pad 8 uses the same four brightnesses for its mode.</td></tr>
 <tr><td>7 and 3</td><td><b>VCA LEVEL +</b> (pad 7) and <b>LEVEL −</b> (pad 3). Each press moves the level by 8; holding repeats. Both LEDs show the level: weak red at 0, strong red at 127, scaled in between.</td><td>Pad 7 = <b>VCF polarity</b>. Red = on (inverted), unlit = off (normal). Pad 3 = <b>pulse</b> on/off: red = on, unlit = off.</td></tr>
 <tr><td>8 and 4</td><td>Pad 8 = <b>CHORUS</b>, each press cycles off → I → II → I+II → off. LED off / weak red / red / strong red. Pad 4 = <b>ENV / GATE</b>. Red = ENV, unlit = GATE.</td><td>Pad 8 = <b>PWM LFO / MAN</b>. Red = LFO, unlit = MAN. Pad 4 = <b>saw</b> on/off. Red = on, unlit = off. Pulse and saw are independent.</td></tr>
 </table>
@@ -280,7 +280,7 @@ H.append(f'''<section class="page" id="s7">{sect(7, "Selecting Patches")}
 <tr><td>63</td><td>A88</td><td>B11</td><td>A87</td></tr>
 <tr><td>127</td><td>B88</td><td>A11</td><td>B87</td></tr>
 </table>
-<p>The step crosses from patch 8 of a group into patch 1 of the next group, and from A88 into B11. It loads the stored patch and keeps the master volume. Knob edits that were not part of that memory are replaced. The Pi’s green LED does not blink for this; it blinks only for a side change (one blink = SIDE 1, two = SIDE 2).</p>
+<p>The step crosses from patch 8 of a group into patch 1 of the next group, and from A88 into B11. It loads the stored patch and keeps the master volume. Knob edits that were not part of that memory are replaced. Pads 1 and 5 then show where you are: off, weak red, red, or strong red for the four blocks of 32 sounds (section 3). That brightness is the place in the list, not an on/off state. The Pi’s green LED does not blink for a sound step; it blinks only for a side change (one blink = SIDE 1, two = SIDE 2).</p>
 <p><b>Example:</b> from A11, press NEXT seven times to reach A18, once more to reach A21. Thirty-nine presses from A11 reach A48 Synth Bass I. PREVIOUS from A11 lands on B88.</p>
 <h2>Program Change</h2>
 <p>MIDI Program Change 0–127 selects A11 … B88 directly (0 = A11, 63 = A88, 64 = B11, 127 = B88). The MPK can send program changes from its pads (pad Play Mode "ProgCh" in the MPK's program editor, per AKAI's guide).</p>

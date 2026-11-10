@@ -34,6 +34,16 @@ inline int levelLedVelocity(int midi) {
   return kLedWeak + (midi * (kLedStrong - kLedWeak)) / 127;
 }
 
+// Hvor i lydlisten pad 1 og pad 5 lyser. Ikke en av/på-tilstand.
+// 0–31 A11–A48 av, 32–63 A51–A88 svak, 64–95 B11–B48 rød, 96–127 B51–B88 sterk.
+inline int soundPositionLed(int slot) {
+  slot = std::clamp(slot, 0, 127);
+  if (slot < 32) return kLedOff;
+  if (slot < 64) return kLedWeak;
+  if (slot < 96) return kLedRed;
+  return kLedStrong;
+}
+
 struct ControllerConfig {
   int keyChannel = -1;                      // -1 = alle kanaler unntatt pad-kanalen
   int padChannel = 9;                       // 0-basert (MIDI-kanal 10)
@@ -270,7 +280,7 @@ private:
       case pfSaw: return onOff(mS.get(kDcoSaw) > 0.5f);
       case pfEnvPol: return onOff(mS.get(kVcfEnvInv) > 0.5f);                  // på = rød = invertert
       case pfSoundNext:
-      case pfSoundPrev:
+      case pfSoundPrev: return soundPositionLed(mSlot);
       case pfNone: return kLedOff;
     }
     return kLedOff;

@@ -180,8 +180,29 @@ static int selftest(const std::string& wavDir) {
   check(ctl.page() == 0, "SIDE 1 er aktiv etter oppstart");
   check(ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff,
         "SIDE 1: pad 6 lyser, pad 2 er slukket");
-  check(ctl.padLedVelocity(4) == kLedOff && ctl.padLedVelocity(0) == kLedOff,
-        "neste/forrige-padene er slukket");
+  check(ctl.padLedVelocity(4) == kLedOff && ctl.padLedVelocity(0) == soundPositionLed(0),
+        "A11: posisjonslampe på pad 1 og 5 er av");
+  {
+    auto at = [&](int slot, int led) {
+      ctl.handle(ev(MidiEvent::Program, 0, slot, 0), t);
+      bool s1 = ctl.page() == 0 && ctl.padLedVelocity(0) == led && ctl.padLedVelocity(4) == led
+             && ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff;
+      ctl.handle(ev(MidiEvent::NoteOn, 9, 45, 100), t);
+      bool s2 = ctl.page() == 1 && ctl.padLedVelocity(0) == led && ctl.padLedVelocity(4) == led
+             && ctl.padLedVelocity(1) == kLedStrong && ctl.padLedVelocity(5) == kLedOff;
+      ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
+      return s1 && s2 && ctl.page() == 0;
+    };
+    check(at(0, kLedOff) && at(31, kLedOff), "spor 0–31 (A11–A48): pad 1 og 5 av, på begge sider");
+    check(at(32, kLedWeak) && at(63, kLedWeak), "spor 32–63 (A51–A88): svak rød");
+    check(at(64, kLedRed) && at(95, kLedRed), "spor 64–95 (B11–B48): rød");
+    check(at(96, kLedStrong) && at(127, kLedStrong), "spor 96–127 (B51–B88): sterk rød");
+    ctl.handle(ev(MidiEvent::Program, 0, 31, 0), t);
+    ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
+    check(ctl.currentSlot() == 32 && ctl.padLedVelocity(0) == kLedWeak && ctl.padLedVelocity(4) == kLedWeak,
+          "neste lyd over A48 oppdaterer lampen til svak rød");
+    ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
+  }
   // SIDE 1-knotter: K1 = ENV A (CC70), K7 = VCF FREQ (CC76), K8 = VCF RES (CC77)
   ctl.handle(ev(MidiEvent::CC, 0, 70, 64), t);
   check(std::fabs(s.get(kEnvA) - 64 / 127.f) < 1e-4, "side 1 knott 1 (CC70) = ENV A");

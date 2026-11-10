@@ -143,6 +143,7 @@ Trykk **Bank A/B** på MPK for å bytte bank. Pad 1–4 er nederste rad.
 | 4 | ENV/GATE (rød = ENV) | SAG av/på (rød = på) |
 
 - **Lyd:** én patch, spor 0–127 (A11 … B88). Neste er +1 og går rundt fra B88 til A11. Forrige er −1 og går rundt fra A11 til B88. Steget krysser gruppe og bank (A18 + 1 = A21, A88 + 1 = B11). Den laster lagret patch og beholder volumet. Pi-LED-en blinker ikke for dette.
+- **Posisjonslampe** på pad 1 og 5, begge sider: 0–31 (A11–A48) av, 32–63 (A51–A88) svak rød, 64–95 (B11–B48) rød, 96–127 (B51–B88) sterk rød. Det er plassen i listen, ikke av/på. Sterk rød her er ikke side-lampen (pad 2/6). `pad_leds = off` slår den av.
 - **LEVEL +/−:** hvert trykk endrer VCA LEVEL med 8. Holder du padden, gjentas steget. Begge LED-ene viser nivået: svak rød ved 0, sterk rød ved 127, skalert imellom.
 - **CHORUS-LED:** av = av, svak rød = I, rød = II, sterk rød = I+II.
 - **LFO/MAN** veksler bare LFO og MAN. PWM fra ENV kan ligge i en patch (LED slukket); ett trykk velger da LFO.
@@ -388,7 +389,7 @@ Kommandoer på Pi-en (krever skjerm og tastatur, eller å montere SD-kortet):
 
 **1.2.0 (9. november 2026)**
 - Tosiders panel etter den rene skissen. Pad 6 velger SIDE 1, pad 2 velger SIDE 2. Aktiv side-pad lyser sterkt rødt, den andre er slukket.
-- Pad 5 = neste lyd, pad 1 = forrige lyd. En lyd er ett patchminne (spor 0–127, A11…B88), med wrap.
+- Pad 5 = neste lyd, pad 1 = forrige lyd. En lyd er ett patchminne (spor 0–127, A11…B88), med wrap. Samme to padder lyser som posisjonslampe: av, svak, rød, sterk for A11–A48, A51–A88, B11–B48 og B51–B88.
 - SIDE 1: LEVEL +/− (pad 7/3), CHORUS (pad 8), ENV/GATE (pad 4). Knotter: A D S R, SUB, NOISE, VCF FREQ, VCF RES.
 - SIDE 2: VCF-polaritet (pad 7), PWM LFO/MAN (pad 8), puls (pad 3), sag (pad 4). Knotter: DCO LFO, DCO PWM, LFO RATE, LFO DELAY, HPF, VCF ENV, VCF LFO, VCF KYBD.
 - DCO RANGE og transpose (hold pad + tangent) er tatt av panelet. Begge pad-banker gjør samme panel. Panelet lagrer ikke patcher.
