@@ -14,7 +14,7 @@
 #include <thread>
 #include <mutex>
 #ifndef JU6_VERSION
-#define JU6_VERSION "1.2.0"
+#define JU6_VERSION "1.3.0"
 #endif
 #include <pthread.h>
 #include <sched.h>
@@ -154,6 +154,26 @@ static int demo(const std::string& dir, int os) {
 }
 
 
+// Første linjer i ju6/status.txt: kjørende versjon og hvilken pad-mapping som er aktiv.
+static std::string statusPrefix() {
+  char b[160];
+  snprintf(b, sizeof b, "JU-6 Pi %s\nversjon: %s\npad-mapping: %d\n",
+           JU6_VERSION, JU6_VERSION, kMappingVersion);
+  return b;
+}
+
+static Config loadConfig(const std::string& cfgPath, const std::string& dataDir) {
+  Config cfg;
+  cfg.load(cfgPath);
+  Config user;
+  if (user.load(dataDir + "/ju6.conf")) {
+    if (mergeUserConfig(cfg, user))
+      logf("ju6.conf på datapartisjonen har ikke mapping_version %d – pad-notene fra %s beholdes",
+           kMappingVersion, JU6_VERSION);
+  }
+  return cfg;
+}
+
 // ------------------------------------------------------------ selvtest av MPK-mappingen (uten maskinvare)
 static int selftest(const std::string& wavDir) {
   int fails = 0;
@@ -165,122 +185,174 @@ static int selftest(const std::string& wavDir) {
   ctl.setEmitLeds(false);
   auto ev = [](MidiEvent::Type ty, int ch, int d1, int d2) { MidiEvent e{}; e.type = ty; e.ch = (uint8_t)ch; e.d1 = (uint8_t)d1; e.d2 = (uint8_t)d2; return e; };
   double t = 0;
-  // Neste/forrige lyd: ett patchminne (spor 0–127). Pad 5 = +1, pad 1 = −1. Begge banker.
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
-  check(ctl.currentSlot() == 1, "pad 5 (neste lyd) går fra A11 til A12");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 40, 100), t);   // bank A, samme fysiske pad
-  check(ctl.currentSlot() == 2, "pad 5 i bank A er også neste lyd (A13)");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 44, 100), t);
-  check(ctl.currentSlot() == 1, "pad 1 (forrige lyd) går tilbake til A12");
-  ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 44, 100), t);
-  check(ctl.currentSlot() == 127, "forrige lyd fra A11 går rundt til B88");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
-  check(ctl.currentSlot() == 0, "neste lyd fra B88 går rundt til A11");
+  check(std::string(JU6_VERSION) == "1.3.0", "kjørende versjon er 1.3.0");
+  check(kMappingVersion == 2, "pad-mapping er versjon 2");
+  {
+    std::string prefix = statusPrefix();
+    check(prefix.find("versjon: 1.3.0\n") != std::string::npos, "status.txt får linjen versjon: 1.3.0");
+    check(prefix.find("pad-mapping: 2\n") != std::string::npos, "status.txt får pad-mapping: 2");
+  }
+  // Wrap av spor: bank = gruppe på 8, patchnummeret i gruppen beholdes.
+  check(wrapSlot(10 - 8) == 2 && slotName(2) == "A13", "A23 − 8 = A13");
+  check(wrapSlot(2 + 8) == 10 && slotName(10) == "A23", "A13 + 8 = A23");
+  check(slotName(wrapSlot(0 - 8)) == "B81", "A11 − 8 går rundt til B81");
+  check(slotName(wrapSlot(1 - 8)) == "B82", "A12 − 8 = B82 (A1x → B8x)");
+  check(slotName(wrapSlot(7 - 8)) == "B88", "A18 − 8 = B88");
+  check(slotName(wrapSlot(122 + 8)) == "A13", "B83 + 8 går rundt til A13");
+  check(slotName(wrapSlot(120 + 8)) == "A11", "B81 + 8 = A11");
+  check(slotName(wrapSlot(127 + 8)) == "A18", "B88 + 8 = A18");
+  check(wrapSlot(0 - 1) == 127 && wrapSlot(127 + 1) == 0, "lyd ±1 går rundt mellom A11 og B88");
   check(ctl.page() == 0, "SIDE 1 er aktiv etter oppstart");
-  check(ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff,
-        "SIDE 1: pad 6 lyser, pad 2 er slukket");
-  check(ctl.padLedVelocity(4) == kLedOff && ctl.padLedVelocity(0) == soundPositionLed(0),
-        "A11: posisjonslampe på pad 1 og 5 er av");
+  // Bank A: pad 6 (note 41) = neste lyd, pad 5 (note 40) = forrige lyd. Siden blir værende.
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 41, 100), t);
+  check(ctl.currentSlot() == 1 && ctl.page() == 0, "pad 6 på side 1 går fra A11 til A12");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
+  check(ctl.currentSlot() == 2 && ctl.page() == 1, "pad 6 i bank B er også neste lyd, og velger side 2");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 40, 100), t);
+  check(ctl.currentSlot() == 1 && ctl.page() == 0, "pad 5 i bank A er forrige lyd og velger side 1 igjen");
+  ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 40, 100), t);
+  check(ctl.currentSlot() == 127 && ctl.page() == 0, "forrige lyd fra A11 går rundt til B88");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 41, 100), t);
+  check(ctl.currentSlot() == 0, "neste lyd fra B88 går rundt til A11");
+  // Bank-padene: pad 1 (note 36) = −8, pad 2 (note 37) = +8. Ikke sidevalg.
+  ctl.handle(ev(MidiEvent::Program, 0, 10, 0), t);                 // A23
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 36, 100), t);
+  check(ctl.currentSlot() == 2 && slotName(ctl.currentSlot()) == "A13" && ctl.page() == 0,
+        "pad 1 er forrige bank: A23 → A13");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 37, 100), t);
+  check(ctl.currentSlot() == 10 && slotName(ctl.currentSlot()) == "A23", "pad 2 er neste bank: A13 → A23");
+  ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 36, 100), t);
+  check(slotName(ctl.currentSlot()) == "B81", "forrige bank fra A11 går rundt til B81");
+  ctl.handle(ev(MidiEvent::Program, 0, 122, 0), t);                // B83
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 45, 100), t);                // bank B, pad 2, velger side 2
+  check(ctl.currentSlot() == 2 && slotName(ctl.currentSlot()) == "A13" && ctl.page() == 1,
+        "pad 2 i bank B er også neste bank, og velger side 2");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 40, 100), t);                // tilbake til side 1
+  check(ctl.page() == 0, "pad i bank A velger side 1");
+  // Posisjonslampe på lyd-padene (5 og 6) og bank-padene (1 og 2), begge sider.
   {
     auto at = [&](int slot, int led) {
       ctl.handle(ev(MidiEvent::Program, 0, slot, 0), t);
-      bool s1 = ctl.page() == 0 && ctl.padLedVelocity(0) == led && ctl.padLedVelocity(4) == led
-             && ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff;
-      ctl.handle(ev(MidiEvent::NoteOn, 9, 45, 100), t);
-      bool s2 = ctl.page() == 1 && ctl.padLedVelocity(0) == led && ctl.padLedVelocity(4) == led
-             && ctl.padLedVelocity(1) == kLedStrong && ctl.padLedVelocity(5) == kLedOff;
-      ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
-      return s1 && s2 && ctl.page() == 0;
+      for (int page = 0; page < 2; page++)
+        for (int pad : {0, 1, 4, 5})
+          if (ctl.padLedVelocity(page, pad) != led) return false;
+      return true;
     };
-    check(at(0, kLedOff) && at(31, kLedOff), "spor 0–31 (A11–A48): pad 1 og 5 av, på begge sider");
+    check(at(0, kLedOff) && at(31, kLedOff), "spor 0–31 (A11–A48): pad 1, 2, 5 og 6 av, på begge sider");
     check(at(32, kLedWeak) && at(63, kLedWeak), "spor 32–63 (A51–A88): svak rød");
     check(at(64, kLedRed) && at(95, kLedRed), "spor 64–95 (B11–B48): rød");
     check(at(96, kLedStrong) && at(127, kLedStrong), "spor 96–127 (B51–B88): sterk rød");
     ctl.handle(ev(MidiEvent::Program, 0, 31, 0), t);
-    ctl.handle(ev(MidiEvent::NoteOn, 9, 48, 100), t);
-    check(ctl.currentSlot() == 32 && ctl.padLedVelocity(0) == kLedWeak && ctl.padLedVelocity(4) == kLedWeak,
-          "neste lyd over A48 oppdaterer lampen til svak rød");
+    ctl.handle(ev(MidiEvent::NoteOn, 9, 41, 100), t);
+    check(ctl.currentSlot() == 32 && ctl.padLedVelocity(0, 0) == kLedWeak && ctl.padLedVelocity(0, 5) == kLedWeak
+          && ctl.padLedVelocity(1, 1) == kLedWeak,
+          "neste lyd over A48 oppdaterer posisjonslampen til svak rød");
     ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
   }
-  // SIDE 1-knotter: K1 = ENV A (CC70), K7 = VCF FREQ (CC76), K8 = VCF RES (CC77)
+  // Knottene følger siden. De bytter ikke side av seg selv.
   ctl.handle(ev(MidiEvent::CC, 0, 70, 64), t);
-  check(std::fabs(s.get(kEnvA) - 64 / 127.f) < 1e-4, "side 1 knott 1 (CC70) = ENV A");
+  check(ctl.page() == 0 && std::fabs(s.get(kEnvA) - 64 / 127.f) < 1e-4, "side 1 knott 1 (CC70) = ENV A");
   ctl.handle(ev(MidiEvent::CC, 0, 76, 127), t);
   check(std::fabs(s.get(kVcfFreq) - 1.f) < 1e-4, "side 1 knott 7 (CC76) = VCF FREQ");
   ctl.handle(ev(MidiEvent::CC, 0, 77, 0), t);
   check(std::fabs(s.get(kVcfRes) - 0.f) < 1e-4, "side 1 knott 8 (CC77) = VCF RES");
-  // Chorus-pad (pad 8, note 51): av -> I -> II -> I+II -> av
+  // Chorus-pad (side 1, pad 8, note 43): av -> I -> II -> I+II -> av
   auto chorus = [&] { return (s.get(kChorusI) > 0.5f ? 1 : 0) + (s.get(kChorusII) > 0.5f ? 2 : 0); };
   int c0 = chorus();
   const int chorusLed[4] = { kLedOff, kLedWeak, kLedRed, kLedStrong };
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
-  check(chorus() == (c0 + 1) % 4, "pad 8 på side 1 går ett chorus-trinn frem");
-  check(ctl.padLedVelocity(7) == chorusLed[chorus()], "chorus-LED: av / svak / rød / sterk");
-  for (int i = 0; i < 3; i++) ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 43, 100), t);
+  check(ctl.page() == 0 && chorus() == (c0 + 1) % 4, "pad 8 på side 1 går ett chorus-trinn frem");
+  check(ctl.padLedVelocity(0, 7) == chorusLed[chorus()], "chorus-LED: av / svak / rød / sterk");
+  for (int i = 0; i < 3; i++) ctl.handle(ev(MidiEvent::NoteOn, 9, 43, 100), t);
   check(chorus() == c0, "fire chorus-trykk er tilbake ved utgangspunktet");
-  // VCA LEVEL + (pad 7, note 50) og LEVEL − (pad 3, note 46), steg 8
+  // VCA LEVEL + (pad 7, note 42) og LEVEL − (pad 3, note 38), steg 8
   int lvl = (int)std::lround(s.get(kVcaLevel) * 127.f);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
+  bool invBefore = s.get(kVcfEnvInv) > 0.5f;
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 42, 100), t);
   check((int)std::lround(s.get(kVcaLevel) * 127.f) == std::min(127, lvl + kLevelStep), "pad 7 LEVEL + øker VCA LEVEL");
+  check((s.get(kVcfEnvInv) > 0.5f) == invBefore, "LEVEL + på side 1 rører ikke VCF-polaritet");
   int up = (int)std::lround(s.get(kVcaLevel) * 127.f);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 46, 100), t);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 38, 100), t);
   int back = (int)std::lround(s.get(kVcaLevel) * 127.f);
   check(back == std::max(0, up - kLevelStep), "pad 3 LEVEL − senker VCA LEVEL");
-  check(ctl.padLedVelocity(6) == ctl.padLedVelocity(2) && ctl.padLedVelocity(6) == levelLedVelocity(back),
+  check(ctl.padLedVelocity(0, 6) == ctl.padLedVelocity(0, 2) && ctl.padLedVelocity(0, 6) == levelLedVelocity(back),
         "LEVEL-padene viser samme styrke, svak ved MIN og sterk ved MAX");
-  s.set(kVcaLevel, 0.f); check(ctl.padLedVelocity(6) == kLedWeak, "VCA LEVEL 0 = svak rød");
-  s.set(kVcaLevel, 1.f); check(ctl.padLedVelocity(6) == kLedStrong, "VCA LEVEL 127 = sterk rød");
+  s.set(kVcaLevel, 0.f); check(ctl.padLedVelocity(0, 6) == kLedWeak, "VCA LEVEL 0 = svak rød");
+  s.set(kVcaLevel, 1.f); check(ctl.padLedVelocity(0, 6) == kLedStrong, "VCA LEVEL 127 = sterk rød");
   s.set(kVcaLevel, 0.f);
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), 30.0);
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 42, 100), 30.0);
   ctl.tick(30.41);
   check((int)std::lround(s.get(kVcaLevel) * 127.f) == 2 * kLevelStep, "hold LEVEL + gjentar steget");
-  ctl.handle(ev(MidiEvent::NoteOff, 9, 50, 0), 30.5);
-  // ENV/GATE (pad 4, note 47): rød = ENV
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 47, 100), t);
+  ctl.handle(ev(MidiEvent::NoteOff, 9, 42, 0), 30.5);
+  check(ctl.page() == 0, "Note Off på en pad bytter ikke side");
+  // ENV/GATE (pad 4, note 39): rød = ENV
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 39, 100), t);
   bool envNow = (int)std::lround(s.get(kVcaMode)) == 0;
-  check(ctl.padLedVelocity(3) == (envNow ? kLedRed : kLedOff), "ENV/GATE-LED: rød = ENV, av = GATE");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 47, 100), t);
+  check(ctl.padLedVelocity(0, 3) == (envNow ? kLedRed : kLedOff), "ENV/GATE-LED: rød = ENV, av = GATE");
+  ctl.handle(ev(MidiEvent::NoteOn, 9, 39, 100), t);
   check(((int)std::lround(s.get(kVcaMode)) == 0) != envNow, "pad 4 veksler ENV/GATE");
-  // SIDE 2 (pad 2, note 45). Pad 6 slukkes, pad 2 tennes.
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 45, 100), t);
-  check(ctl.page() == 1, "pad B2 velger SIDE 2");
-  check(ctl.padLedVelocity(1) == kLedStrong && ctl.padLedVelocity(5) == kLedOff,
-        "SIDE 2: pad 2 lyser, pad 6 er slukket");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
-  check(ctl.page() == 0 && ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff,
-        "pad B6 velger SIDE 1 igjen, og bare den padden lyser");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 45, 100), t);
+  // Første pad i bank B velger side 2 og utfører side 2-funksjonen. Pad 2 er ikke lenger SIDE 2.
+  {
+    Request r; while (rq.pop(r)) {}
+    int slotBefore = ctl.currentSlot();
+    int lvlNow = (int)std::lround(s.get(kVcaLevel) * 127.f);
+    bool inv = s.get(kVcfEnvInv) > 0.5f;
+    ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);             // bank B, pad 7 = VCF-polaritet
+    bool blinked = false;
+    while (rq.pop(r)) if (r.type == Request::LedBlink && r.a == 2) blinked = true;
+    check(ctl.page() == 1 && blinked, "første pad i bank B velger side 2 og blinker to ganger");
+    check((s.get(kVcfEnvInv) > 0.5f) != inv, "det trykket veksler VCF-polaritet, ikke en side-pad");
+    check((int)std::lround(s.get(kVcaLevel) * 127.f) == lvlNow && ctl.currentSlot() == slotBefore,
+          "polaritet-paden endrer verken nivå eller lyd");
+    check(ctl.padLedVelocity(1, 6) == ((s.get(kVcfEnvInv) > 0.5f) ? kLedRed : kLedOff), "polaritet-LED: rød = på");
+    while (rq.pop(r)) {}
+    ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
+    int extra = 0;
+    while (rq.pop(r)) if (r.type == Request::LedBlink) extra++;
+    check(ctl.page() == 1 && extra == 0, "nytt trykk i samme bank bytter ikke side på nytt");
+  }
   ctl.handle(ev(MidiEvent::CC, 0, 70, 90), t);
-  check(std::fabs(s.get(kDcoLfo) - 90 / 127.f) < 1e-3, "side 2 knott 1 (CC70) = DCO LFO");
+  check(ctl.page() == 1 && std::fabs(s.get(kDcoLfo) - 90 / 127.f) < 1e-3, "etter bank B følger CC70 side 2 (DCO LFO)");
   ctl.handle(ev(MidiEvent::CC, 0, 74, 0), t);
-  check((int)std::lround(s.get(kHpfFreq)) == 0, "side 2 knott 5 (CC74) = HPF (0 = bassløft)");
+  check((int)std::lround(s.get(kHpfFreq)) == 0 && ctl.page() == 1, "side 2 knott 5 (CC74) = HPF, og knotten bytter ikke side");
   // Puls (pad 3, note 46) og sag (pad 4, note 47) er hver for seg. Rød = på.
   int oct = (int)std::lround(s.get(kOctTranspose));
   bool pulse = s.get(kDcoPulse) > 0.5f, saw = s.get(kDcoSaw) > 0.5f;
   ctl.handle(ev(MidiEvent::NoteOn, 9, 46, 100), t);
-  check((s.get(kDcoPulse) > 0.5f) != pulse && (s.get(kDcoSaw) > 0.5f) == saw, "pad 3 veksler puls uten å røre sag");
-  check(ctl.padLedVelocity(2) == ((s.get(kDcoPulse) > 0.5f) ? kLedRed : kLedOff), "puls-LED: rød = på, slukket = av");
+  check(ctl.page() == 1 && (s.get(kDcoPulse) > 0.5f) != pulse && (s.get(kDcoSaw) > 0.5f) == saw,
+        "pad 3 på side 2 veksler puls uten å røre sag");
+  check(ctl.padLedVelocity(1, 2) == ((s.get(kDcoPulse) > 0.5f) ? kLedRed : kLedOff), "puls-LED: rød = på, slukket = av");
   ctl.handle(ev(MidiEvent::NoteOn, 9, 47, 100), t);
-  check((s.get(kDcoSaw) > 0.5f) != saw, "pad 4 veksler sag");
-  check(ctl.padLedVelocity(3) == ((s.get(kDcoSaw) > 0.5f) ? kLedRed : kLedOff), "sag-LED: rød = på, slukket = av");
+  check((s.get(kDcoSaw) > 0.5f) != saw, "pad 4 på side 2 veksler sag");
+  check(ctl.padLedVelocity(1, 3) == ((s.get(kDcoSaw) > 0.5f) ? kLedRed : kLedOff), "sag-LED: rød = på, slukket = av");
   check((int)std::lround(s.get(kOctTranspose)) == oct, "side 2-padene endrer ikke DCO RANGE");
   // LFO/MAN (pad 8, note 51). Rød = LFO.
   s.set(kPwmMode, 2.f);
-  check(ctl.padLedVelocity(7) == kLedOff, "PWM fra ENV lyser ikke (samme som MAN)");
+  check(ctl.padLedVelocity(1, 7) == kLedOff, "PWM fra ENV lyser ikke (samme som MAN)");
   ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
-  check((int)std::lround(s.get(kPwmMode)) == 0 && ctl.padLedVelocity(7) == kLedRed, "pad 8 velger LFO og lyser rødt");
+  check((int)std::lround(s.get(kPwmMode)) == 0 && ctl.padLedVelocity(1, 7) == kLedRed, "pad 8 på side 2 velger LFO og lyser rødt");
   ctl.handle(ev(MidiEvent::NoteOn, 9, 51, 100), t);
-  check((int)std::lround(s.get(kPwmMode)) == 1 && ctl.padLedVelocity(7) == kLedOff, "nytt trykk velger MAN og slukker");
-  // VCF-polaritet (pad 7, note 50). På = rød = invertert.
-  bool inv = s.get(kVcfEnvInv) > 0.5f;
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), t);
-  check((s.get(kVcfEnvInv) > 0.5f) != inv, "pad 7 veksler VCF-polaritet");
-  check(ctl.padLedVelocity(6) == ((s.get(kVcfEnvInv) > 0.5f) ? kLedRed : kLedOff), "polaritet-LED: rød = på");
-  ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
-  check(ctl.page() == 0 && ctl.padLedVelocity(5) == kLedStrong && ctl.padLedVelocity(1) == kLedOff,
-        "sidebytte oppdaterer pad 2 og pad 6 til aktiv side");
-  check(ctl.padLedVelocity(7) == chorusLed[chorus()], "chorus-LED er tilbake når side 1 vises");
+  check((int)std::lround(s.get(kPwmMode)) == 1 && ctl.padLedVelocity(1, 7) == kLedOff, "nytt trykk velger MAN og slukker");
+  // Tilbake til side 1: bank A-paden gjør side 1-jobben, og chorus-lampen ligger på note 43.
+  {
+    Request r; while (rq.pop(r)) {}
+    ctl.handle(ev(MidiEvent::NoteOn, 9, 43, 100), t);
+    bool blinked = false;
+    while (rq.pop(r)) if (r.type == Request::LedBlink && r.a == 1) blinked = true;
+    check(ctl.page() == 0 && blinked, "første pad i bank A velger side 1 og blinker én gang");
+    check(ctl.padLedVelocity(0, 7) == chorusLed[chorus()], "chorus-LED følger side 1, pad 8");
+  }
+  ctl.handle(ev(MidiEvent::CC, 0, 70, 30), t);
+  check(ctl.page() == 0 && std::fabs(s.get(kEnvA) - 30 / 127.f) < 1e-3, "etter bank A følger CC70 side 1 igjen");
+  // Lav tangent med pad-notenummer på en annen kanal er ikke en pad.
+  {
+    int slotNow = ctl.currentSlot();
+    ctl.handle(ev(MidiEvent::NoteOn, 0, 36, 100), t);
+    ctl.handle(ev(MidiEvent::NoteOff, 0, 36, 0), t);
+    check(ctl.currentSlot() == slotNow && ctl.page() == 0, "note 36 på kanal 1 er en tangent, ikke forrige bank");
+  }
   ctl.handle(ev(MidiEvent::CC, 0, 64, 127), t);
   check(s.get(kHold) > 0.5f, "CC64 (sustain) = Hold");
   ctl.handle(ev(MidiEvent::CC, 0, 64, 0), t);
@@ -288,31 +360,99 @@ static int selftest(const std::string& wavDir) {
   ctl.handle(ev(MidiEvent::NoteOn, 0, 65, 100), 10.1); ctl.handle(ev(MidiEvent::NoteOff, 0, 65, 0), 10.2);
   ctl.handle(ev(MidiEvent::NoteOff, 9, 51, 0), 10.3);
   check((int)std::lround(s.get(kTransposeOffset)) == 0, "hold pad + tangent setter ikke transpose");
-  // Pad-LED-kø: side-padene sendes på både bank A og bank B, aktiv side sterk, den andre av.
+  // Pad-LED: side 1 til noter 36–43, side 2 til 44–51, uavhengig av aktiv side.
   {
     Request r; while (rq.pop(r)) {}
+    ctl.handle(ev(MidiEvent::Program, 0, 96, 0), t);   // B51, sterk posisjonslampe
+    int chorusVel = ctl.padLedVelocity(0, 7), pwmVel = ctl.padLedVelocity(1, 7);
+    int levelVel = ctl.padLedVelocity(0, 6), polVel = ctl.padLedVelocity(1, 6);
     ctl.setEmitLeds(true);
-    bool sawB6 = false, sawB2 = false, sawA6 = false, sawA2 = false;
-    while (rq.pop(r)) if (r.type == Request::PadLed) {
-      if (r.a == 49 && r.b == kLedStrong) sawB6 = true;
-      if (r.a == 45 && r.b == kLedOff) sawB2 = true;
-      if (r.a == 41 && r.b == kLedStrong) sawA6 = true;
-      if (r.a == 37 && r.b == kLedOff) sawA2 = true;
-    }
-    check(ctl.page() == 0 && sawB6 && sawB2 && sawA6 && sawA2,
-          "SIDE 1-LED sendes for pad 6/2 på bank A og bank B");
-    ctl.handle(ev(MidiEvent::NoteOn, 9, 45, 100), t);
-    sawB6 = sawB2 = sawA6 = sawA2 = false;
-    while (rq.pop(r)) if (r.type == Request::PadLed) {
-      if (r.a == 49 && r.b == kLedOff) sawB6 = true;
-      if (r.a == 45 && r.b == kLedStrong) sawB2 = true;
-      if (r.a == 41 && r.b == kLedOff) sawA6 = true;
-      if (r.a == 37 && r.b == kLedStrong) sawA2 = true;
-    }
-    check(ctl.page() == 1 && sawB6 && sawB2 && sawA6 && sawA2,
-          "bytte til SIDE 2 slukker pad 6 og tenner pad 2 på begge banker");
-    ctl.handle(ev(MidiEvent::NoteOn, 9, 49, 100), t);
+    int got[128]; for (int& g : got) g = -2;
+    while (rq.pop(r)) if (r.type == Request::PadLed && r.a < 128) got[r.a] = r.b;
+    bool pos = got[36] == kLedStrong && got[37] == kLedStrong && got[40] == kLedStrong && got[41] == kLedStrong
+            && got[44] == kLedStrong && got[45] == kLedStrong && got[48] == kLedStrong && got[49] == kLedStrong;
+    check(pos, "posisjonslampe sendes til lyd- og bank-padene på både note 36–43 og 44–51");
+    check(got[43] == chorusVel && got[42] == levelVel && got[38] == levelVel
+          && got[51] == pwmVel && got[50] == polVel,
+          "side 1-lys (chorus, LEVEL) går til bank A, side 2-lys (LFO/MAN, polaritet) til bank B");
     ctl.setEmitLeds(false);
+    ctl.handle(ev(MidiEvent::Program, 0, 0, 0), t);
+  }
+  // Ekko-vakt: bare pad-kanalen, bare den noten som ble sendt.
+  {
+    LedEcho echo;
+    echo.arm(9, 36);
+    check(echo.drop(9, 36), "ekko av note 36 på pad-kanalen ignoreres");
+    check(!echo.drop(0, 36), "samme note på kanal 1 (lav tangent) slipper igjennom");
+    check(!echo.drop(9, 40), "en annen pad-note på kanal 10 slipper igjennom");
+    check(!echo.drop(9, 60), "en tangent på pad-kanalen som ikke er ekkoet slipper igjennom");
+    usleep(100000);
+    check(!echo.drop(9, 36), "etter 80 ms slipper den samme pad-noten igjennom");
+  }
+  // Gammel ju6.conf uten mapping_version får ikke overstyre pad-notene.
+  {
+    Config base;
+    base.kv["mapping_version"] = "2";
+    base.kv["pad_notes_a"] = "36 37 38 39 40 41 42 43";
+    base.kv["pad_notes_b"] = "44 45 46 47 48 49 50 51";
+    base.kv["audio_output"] = "auto";
+    Config oldUser;
+    oldUser.kv["pad_notes_a"] = "60 61 62 63 64 65 66 67";
+    oldUser.kv["pad_notes_b"] = "68 69 70 71 72 73 74 75";
+    oldUser.kv["audio_output"] = "hdmi";
+    oldUser.kv["master_volume"] = "0.8";
+    Config merged = base;
+    check(mergeUserConfig(merged, oldUser), "gammel ju6.conf uten mapping_version blir avvist på pad-notene");
+    check(merged.str("pad_notes_a", "") == "36 37 38 39 40 41 42 43", "gamle pad-noter overstyrer ikke oppsettet");
+    check(merged.str("pad_notes_b", "") == "44 45 46 47 48 49 50 51", "gamle bank B-noter overstyrer ikke");
+    check(merged.str("audio_output", "") == "hdmi", "andre innstillinger fra den gamle filen beholdes");
+    check(merged.num("mapping_version", 0) == 2, "mapping_version blir stående på 2");
+    ControllerConfig kept; kept.load(merged);
+    check(kept.padA[0] == 36 && kept.padA[5] == 41 && kept.padB[0] == 44 && kept.padB[7] == 51,
+          "kontrolleren bruker 1.3-notene etter migrering");
+    Config oldVer;
+    oldVer.kv["mapping_version"] = "1";
+    oldVer.kv["pad_notes_a"] = "1 2 3 4 5 6 7 8";
+    Config mergedOld = base;
+    check(mergeUserConfig(mergedOld, oldVer), "mapping_version 1 migreres");
+    check(mergedOld.str("pad_notes_a", "") == "36 37 38 39 40 41 42 43", "versjon 1 får ikke egne pad-noter");
+    Config current;
+    current.kv["mapping_version"] = "2";
+    current.kv["pad_notes_a"] = "12 13 14 15 16 17 18 19";
+    current.kv["pad_notes_b"] = "20 21 22 23 24 25 26 27";
+    Config mergedNew = base;
+    check(!mergeUserConfig(mergedNew, current), "mapping_version 2 er ikke en migrering");
+    check(mergedNew.str("pad_notes_a", "") == "12 13 14 15 16 17 18 19", "eksplisitt versjon 2 får egne pad-noter");
+    ControllerConfig custom; custom.load(mergedNew);
+    Synth s2; s2.init(48000, 256, 2);
+    RequestQueue rq2; Controller customCtl(s2, bank, rq2, custom);
+    customCtl.selectSlot(0, false); customCtl.setEmitLeds(false);
+    customCtl.handle(ev(MidiEvent::NoteOn, 9, 17, 100), t);       // egendefinert bank A, pad 6 = neste lyd
+    check(customCtl.currentSlot() == 1 && customCtl.page() == 0, "egen bank A-note er side 1 og neste lyd");
+    customCtl.handle(ev(MidiEvent::NoteOn, 9, 25, 100), t);       // bank B pad 6
+    check(customCtl.currentSlot() == 2 && customCtl.page() == 1, "egen bank B-note er side 2");
+    Config bare; bare.kv["pad_notes_a"] = "60 61 62 63 64 65 66 67";
+    ControllerConfig ignored; ignored.load(bare);
+    check(ignored.padA[0] == 36, "load() uten mapping_version ignorerer pad_notes_a");
+    std::string dir = "/tmp/ju6-oldconf";
+    mkdir(dir.c_str(), 0755);
+    std::string data = dir + "/data";
+    mkdir(data.c_str(), 0755);
+    std::string baseFile =
+      "mapping_version = 2\n"
+      "pad_notes_a = 36 37 38 39 40 41 42 43\n"
+      "pad_notes_b = 44 45 46 47 48 49 50 51\n"
+      "audio_output = auto\n";
+    std::string oldFile = "pad_notes_a = 60 61 62 63 64 65 66 67\npad_notes_b = 68 69 70 71 72 73 74 75\n"
+                          "pad_channel = 10\nmaster_volume = 0.25\n";
+    atomicWrite(dir + "/base.conf", baseFile.data(), baseFile.size());
+    atomicWrite(data + "/ju6.conf", oldFile.data(), oldFile.size());
+    Config fromDisk = loadConfig(dir + "/base.conf", data);
+    ControllerConfig fromDiskCfg; fromDiskCfg.load(fromDisk);
+    check(fromDiskCfg.padA[0] == 36 && fromDiskCfg.padA[5] == 41 && fromDiskCfg.padB[7] == 51,
+          "ju6.conf på datapartisjonen uten mapping_version overstyrer ikke pad-notene");
+    check(fromDiskCfg.padChannel == 9 && std::fabs(fromDisk.real("master_volume", 1) - 0.25) < 1e-6,
+          "kanal og volum fra den gamle filen beholdes");
   }
   { Request r; while (rq.pop(r)) {}
     ctl.handle(ev(MidiEvent::NoteOn, 9, 50, 100), 20.0); ctl.tick(21.6);
@@ -360,7 +500,7 @@ static int selftest(const std::string& wavDir) {
     x.set(kMasterVol, 0.5f);
     std::vector<Ev> e; double tt = 0.1;
     auto send = [&](double at, MidiEvent m) { e.push_back({at, [&c2, m, at](Synth&) { c2.handle(m, at); }}); };
-    int pads[4] = {48, 48, 48, 48};
+    int pads[4] = {41, 41, 41, 41};   // pad 6, bank A: neste lyd, siden blir side 1 (CC76 = VCF FREQ)
     for (int i = 0; i < 4; i++) {
       send(tt, ev(MidiEvent::NoteOn, 9, pads[i], 100)); send(tt + 0.05, ev(MidiEvent::NoteOff, 9, pads[i], 0));
       for (int n : {48, 55, 60, 64}) { send(tt + 0.1, ev(MidiEvent::NoteOn, 0, n, 64)); send(tt + 2.3, ev(MidiEvent::NoteOff, 0, n, 0)); }
@@ -629,8 +769,9 @@ static int runRealtime(const Config& cfg, const std::string& dataDir, double exi
       std::string lbl, mix; { std::lock_guard<std::mutex> g(ready.m); lbl = ready.label; mix = ready.mixer; }
       char buf[512];
       snprintf(buf, sizeof buf,
-               "JU-6 Pi " JU6_VERSION "\nlyd: %s\nperiode: %d rammer, buffer: %d rammer (%.1f ms) ved %d Hz\n"
+               "%slyd: %s\nperiode: %d rammer, buffer: %d rammer (%.1f ms) ved %d Hz\n"
                "VCF-oversampling: %dx\nMIDI-enheter tilkoblet: %d\nunderløp (xruns) siden start, gruppert: %d\n",
+               statusPrefix().c_str(),
                ready.audio ? lbl.c_str() : "venter på lydenhet", ready.period.load(), ready.buffer.load(),
                ready.buffer.load() * 1000.0 / rate, rate, os, midi.connectedCount(), ready.xruns.load() / 10 * 10);
       std::string st = buf;
@@ -726,7 +867,7 @@ int main(int argc, char** argv) {
   if (cmd == "bench") { for (int o : {2, 4}) printf("VCF-oversampling %dx: %.1fx sanntid (6 stemmer, én kjerne)\n", o, benchRT(o, 3.0)); return 0; }
   if (cmd == "list") { Bank b; b.loadFactory(); for (int i = 0; i < 128; i++) printf("%3d  %s\n", i, b.name[i].c_str()); return 0; }
   if (cmd == "utganger" || cmd == "outputs") {
-    Config cfg; cfg.load(cfgPath); cfg.load(dataDir + "/ju6.conf");
+    Config cfg = loadConfig(cfgPath, dataDir);
     auto cards = listCards(); OutputPlan p = planOutputs(cfg);
     printf("Lydkort ALSA ser nå:\n");
     for (auto& c : cards) printf("  %d  id=%-12s navn=%-22s driver=%s%s\n", c.index, c.id.c_str(), c.name.c_str(), c.driver.c_str(), isDacPlus(c) ? "   <- Raspberry Pi DAC+" : "");
@@ -740,8 +881,7 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (cmd != "run") { usage(); return 1; }
-  Config cfg; cfg.load(cfgPath);
-  cfg.load(dataDir + "/ju6.conf");      // brukerens fil på data-partisjonen overstyrer
+  Config cfg = loadConfig(cfgPath, dataDir);   // ju6.conf på datapartisjonen overstyrer, unntatt gammel pad-mapping
   logf("starter (konfig %s + %s/ju6.conf)", cfgPath.c_str(), dataDir.c_str());
   return runRealtime(cfg, dataDir, exitAfter);
 }

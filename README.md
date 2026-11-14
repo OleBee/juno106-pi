@@ -31,7 +31,7 @@ Measured and estimated figures for running JU-6 Pi. Values marked **estimate** h
 
 ## 1. Kort fortalt
 
-1. Last ned `ju6pi-1.2.0.img.xz` fra [Releases](../../releases). Er den delt i
+1. Last ned `ju6pi-1.3.0.img.xz` fra [Releases](../../releases). Er den delt i
    `.part-aa`, `.part-ab` …, slår du delene sammen først (se punkt 2).
 2. Skriv imaget til et microSD-kort (minst 8 GB) med **Raspberry Pi Imager** eller **balenaEtcher**.
 3. Koble til:
@@ -50,21 +50,21 @@ Measured and estimated figures for running JU-6 Pi. Values marked **estimate** h
 | lyser fast | klar til å spille |
 | lyser, med to korte pauser hvert 3. sekund | klar, men på reserveutgang: `audio_output = dacplus`, og DAC+ ble ikke funnet |
 | lyser, med kort pause hvert 2. sekund | klar, men ingen MIDI-enhet funnet |
-| raske blink | side/gruppe byttet (antall blink = nummer), eller patch lagret |
+| raske blink | side byttet (ett blink = side 1, to blink = side 2) |
 
 ## 2. Skrive SD-kortet
 
 **Raspberry Pi Imager:** *Choose Device* → Raspberry Pi 5. *Choose OS* → *Use Custom* → velg
-`ju6pi-1.2.0.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
+`ju6pi-1.3.0.img.xz`. *Choose Storage* → SD-kortet. Når Imager spør om du vil bruke
 OS-tilpasning, svarer du **Nei / No**. Imaget er ferdig konfigurert, og tilpasningen blir ikke brukt.
 
-**balenaEtcher:** *Flash from file* → `ju6pi-1.2.0.img.xz` → *Select target* → *Flash!*
+**balenaEtcher:** *Flash from file* → `ju6pi-1.3.0.img.xz` → *Select target* → *Flash!*
 
 **Hvis filen er delt opp** (GitHub tillater maks 2 GB per fil):
 ```sh
-cat ju6pi-1.2.0.img.xz.part-* > ju6pi-1.2.0.img.xz     # Linux/macOS
-copy /b ju6pi-1.2.0.img.xz.part-aa + ju6pi-1.2.0.img.xz.part-ab ju6pi-1.2.0.img.xz   # Windows
-sha256sum -c ju6pi-1.2.0.img.xz.sha256
+cat ju6pi-1.3.0.img.xz.part-* > ju6pi-1.3.0.img.xz     # Linux/macOS
+copy /b ju6pi-1.3.0.img.xz.part-aa + ju6pi-1.3.0.img.xz.part-ab ju6pi-1.3.0.img.xz   # Windows
+sha256sum -c ju6pi-1.3.0.img.xz.sha256
 ```
 
 ## 3. Lydmotoren
@@ -101,13 +101,22 @@ Lyden går ut på Raspberry Pi DAC+ (hvis det sitter på) eller HDMI.
 
 ## 4. AKAI MPK Mini Plus – mapping
 
-AKAI publiserer ikke en tabell over fabrikkoppsettet. JU-6 Pi bruker MPK-familiens vanlige standardverdier:
-knotter **CC 70–77**, pads på **MIDI-kanal 10** med noter **36–43 (bank A)** og
-**44–51 (bank B)**, pitch-hjul = pitch bend, mod-hjul = CC 1 og sustain = CC 64.
-Gir din MPK andre verdier, endrer du `ju6.conf` på datapartisjonen (punkt 6). Du trenger ikke kompilere noe på nytt.
+Anbefalt oppsett i MPK-programmet (Shift + Prog Sel, eller AKAI Program Editor):
 
-**Tangenter:** spiller synthen på alle MIDI-kanaler. Anslag er **av** (som originalen).
-Oktav-knappene på MPK virker som vanlig.
+- **Tangenter:** MIDI-kanal **1**
+- **Pads:** MIDI-kanal **10**, Play Mode **Note** (ikke Prog Change)
+- **Knotter:** Absolute, CC **70–77** (K1–K4 øverst, K5–K8 nederst)
+
+JU-6 Pi bruker disse verdiene som standard: pads på kanal 10 med noter **36–43 (bank A, side 1)** og
+**44–51 (bank B, side 2)**, pitch-hjul = pitch bend, mod-hjul = CC 1 og sustain = CC 64.
+Tangentene spilles på alle kanaler (`key_channel = omni`), så kanal 1 fra MPK-en treffer synthen.
+Vil du bare ta imot kanal 1, sett `key_channel = 1`.
+
+Egne pad-noter krever `mapping_version = 2` i `ju6/ju6.conf` på datapartisjonen, sammen med `pad_notes_a` og `pad_notes_b`.
+En eldre fil uten den linjen (eller med et lavere tall) får ikke overstyre pad-notene. Øvrige innstillinger i filen brukes som før.
+Du trenger ikke kompilere noe på nytt.
+
+**Tangenter:** anslag er **av** (som originalen). Oktav-knappene på MPK virker som vanlig.
 
 **Pitch-hjul / joystick X (Pitch):** BENDER, med DCO-dybde ±2 halvtoner og VCF-dybde 0 som standard (`bender_dco` / `bender_vcf` i `ju6.conf`).
 **Mod-hjul / joystick Y (CC 1):** MOD (LFO til DCO). Dybden skaleres med `mod_depth`.
@@ -116,34 +125,35 @@ Oktav-knappene på MPK virker som vanlig.
 
 ### To sider
 
-Side 1 er aktiv etter oppstart. **Pad 6** (øverste rad) velger SIDE 1 og **pad 2** (rett under) velger SIDE 2.
-Begge pad-banker på MPK gjør det samme.
-
-**Pad-LED viser alltid aktiv side:** padden for den aktive siden lyser sterkt rødt, den andre er slukket.
-Pi-ens grønne LED blinker én gang for side 1 og to ganger for side 2.
-Andre pad-LED-er oppdateres til den siden du nettopp valgte.
+Side 1 er aktiv etter oppstart. **BANK A/B** på MPK-en velger siden. Et pad-trykk med note 36–43 (bank A) er side 1, og et trykk med note 44–51 (bank B) er side 2.
+Siden bytter på det første pad-trykket etter bankbyttet, og det trykket gjør også jobben til padden på den nye siden.
+Knottene K1–K8 blir på den siden til du trykker en pad i den andre banken. Pi-ens grønne LED blinker én gang for side 1 og to ganger for side 2.
+Det finnes ikke lenger egne SIDE 1- og SIDE 2-pads.
 
 Lysstyrken er fire trinn, sendt som Note On-velocity på pad-kanalen: 0 = slukket, 42 = svak rød, 84 = rød, 127 = sterk rød.
+Side 1-lys sendes til noter 36–43 og side 2-lys til noter 44–51, så lampene stemmer uansett hvilken bank MPK-en viser.
+Et ekko av en lysmelding ignoreres i 80 ms, men bare på pad-kanalen og bare for den noten som ble sendt. Lave tangenter og pad-trykk på andre kanaler blir ikke svelget.
 AKAI beskriver ikke sanntids-feedback i bruksanvisningen for MPK mini Plus (v1.2), så dette er **ikke verifisert på maskinvare**.
 `pad_leds = off` slår det av. `pad_leds = any` sender til alle MIDI-utganger unntatt porten «MIDI 2» (5-pins-brua). Standard `on` sender bare til porter med «MPK» i navnet.
 
 ### Pads
 
-Trykk **Bank A/B** på MPK for å bytte bank. Pad 1–4 er nederste rad.
+Pad 1–4 er nederste rad, pad 5–8 øverste. De fire til venstre gjør det samme på begge sider.
 
-| Pad | SIDE 1 | SIDE 2 |
+| Pad | SIDE 1 (bank A, note 36–43) | SIDE 2 (bank B, note 44–51) |
 |---|---|---|
-| 5 | neste lyd (+1) | samme |
-| 6 | **SIDE 1** (sterk rød når siden er aktiv, ellers slukket) | samme |
+| 5 | forrige lyd (−1) | samme |
+| 6 | neste lyd (+1) | samme |
 | 7 | VCA LEVEL + | VCF-polaritet (rød = på / invertert) |
 | 8 | CHORUS av → I → II → I+II | PWM LFO/MAN (rød = LFO) |
-| 1 | forrige lyd (−1) | samme |
-| 2 | **SIDE 2** (sterk rød når siden er aktiv, ellers slukket) | samme |
+| 1 | forrige bank (−8) | samme |
+| 2 | neste bank (+8) | samme |
 | 3 | VCA LEVEL − | PULS av/på (rød = på) |
 | 4 | ENV/GATE (rød = ENV) | SAG av/på (rød = på) |
 
-- **Lyd:** én patch, spor 0–127 (A11 … B88). Neste er +1 og går rundt fra B88 til A11. Forrige er −1 og går rundt fra A11 til B88. Steget krysser gruppe og bank (A18 + 1 = A21, A88 + 1 = B11). Den laster lagret patch og beholder volumet. Pi-LED-en blinker ikke for dette.
-- **Posisjonslampe** på pad 1 og 5, begge sider: 0–31 (A11–A48) av, 32–63 (A51–A88) svak rød, 64–95 (B11–B48) rød, 96–127 (B51–B88) sterk rød. Det er plassen i listen, ikke av/på. Sterk rød her er ikke side-lampen (pad 2/6). `pad_leds = off` slår den av.
+- **Lyd:** pad 6 er +1 og pad 5 er −1. Én patch, spor 0–127 (A11 … B88). Neste går rundt fra B88 til A11, forrige fra A11 til B88. Steget krysser gruppe og bank (A18 + 1 = A21, A88 + 1 = B11). Den laster lagret patch og beholder volumet. Pi-LED-en blinker ikke for dette.
+- **Bank:** en Juno-bank er en gruppe på 8 patcher. Pad 2 er +8 og pad 1 er −8. Patchnummeret i gruppen beholdes: A23 → A13 med pad 1, A13 → A23 med pad 2. A1x går rundt til B8x (A11 → B81), og B83 går rundt til A13. B88 + 8 går til A18.
+- **Posisjonslampe** på pad 1, 2, 5 og 6, begge sider: 0–31 (A11–A48) av, 32–63 (A51–A88) svak rød, 64–95 (B11–B48) rød, 96–127 (B51–B88) sterk rød. Det er plassen i listen, ikke av/på. `pad_leds = off` slår den av.
 - **LEVEL +/−:** hvert trykk endrer VCA LEVEL med 8. Holder du padden, gjentas steget. Begge LED-ene viser nivået: svak rød ved 0, sterk rød ved 127, skalert imellom.
 - **CHORUS-LED:** av = av, svak rød = I, rød = II, sterk rød = I+II.
 - **LFO/MAN** veksler bare LFO og MAN. PWM fra ENV kan ligge i en patch (LED slukket); ett trykk velger da LFO.
@@ -160,7 +170,8 @@ K1–K4 er øverste rad (CC 70–73), K5–K8 nederste (CC 74–77).
 | **SIDE 2** | DCO LFO | DCO PWM | LFO RATE | LFO DELAY | HPF 0 / 1 / 2 / 3 | VCF ENV | VCF LFO | VCF KYBD |
 
 HPF deler knottens vei i fire like soner: 0–31 = 0 (bassløft), 32–63 = 1, 64–95 = 2, 96–127 = 3.
-Knottene hopper som standard rett til ny verdi. Med `knob_takeover = pickup` må knotten først passere gjeldende verdi,
+Knottene følger den siden et pad-trykk sist valgte. De bytter ikke side bare fordi BANK A/B er trykket.
+De hopper som standard rett til ny verdi. Med `knob_takeover = pickup` må knotten først passere gjeldende verdi,
 og med `knob_mode = relative` følger den MPK-ens Relative-modus.
 
 Bender-dybde, MOD-dybde, volum (også CC 7), stemmemodus, anslag og portamento ligger i `ju6.conf`, ikke på panelet.
@@ -307,14 +318,15 @@ Systemloggen ligger bare i RAM.
 | `mod_depth` | `0.5` | MOD-dybde |
 | `master_volume` | `0.5` | volum |
 | `start_patch` | `0` | patch ved første oppstart (siden huskes siste valgte) |
-| `key_channel` | `omni` | tangentkanal (`omni` eller 1–16) |
-| `pad_channel` | `10` | pad-kanal |
-| `knob_cc` | `70 … 77` | CC-numre for K1–K8 |
-| `pad_notes_a` / `pad_notes_b` | `36 … 43` / `44 … 51` | pad-noter |
+| `key_channel` | `omni` | tangentkanal (`omni` eller 1–16). Anbefalt på MPK-en: kanal 1 |
+| `pad_channel` | `10` | pad-kanal. Anbefalt på MPK-en: kanal 10, Note-modus |
+| `knob_cc` | `70 … 77` | CC-numre for K1–K8, absolute |
+| `mapping_version` | `2` | pad-oppsettet. En JU6DATA-fil uten denne (eller med et lavere tall) får ikke overstyre pad-notene |
+| `pad_notes_a` / `pad_notes_b` | `36 … 43` / `44 … 51` | pad-noter. Bank A = side 1, bank B = side 2 |
 | `mod_cc` | `1` | CC-er som styrer MOD (flere kan listes) |
 | `knob_mode` | `absolute` | eller `relative` |
 | `knob_takeover` | `jump` | eller `pickup` |
-| `save_hold_seconds` | `1.5` | hvor lenge en pad i bank A holdes for å lagre |
+| `save_hold_seconds` | `1.5` | brukes ikke: panelet skriver ikke patcher |
 | `pad_leds` | `on` | `on` (bare MPK), `any` (alle utganger unntatt MIDI 2) eller `off` |
 
 ## 7. Patchliste
@@ -365,7 +377,7 @@ sudo apt install g++ make libasound2-dev g++-aarch64-linux-gnu libasound2-dev:ar
                  qemu-user-static fdisk dosfstools mtools e2fsprogs zerofree xz-utils
 make                    # vert-binær: build/ju6pi
 make samples            # WAV-prøver til samples/
-./build/ju6pi selftest  # tester MPK-mapping, neste/forrige lyd, sysex …
+./build/ju6pi selftest  # tester pad/side/bank, MPK-mapping, sysex …
 make arm64              # build/ju6pi-arm64 (Cortex-A76)
 sudo image/build-image.sh 2026-10-06-raspios-trixie-arm64-lite.img.xz build/ju6pi-arm64 ju6pi.img
 xz -T0 -9 ju6pi.img
@@ -386,6 +398,16 @@ Kommandoer på Pi-en (krever skjerm og tastatur, eller å montere SD-kortet):
 `journalctl -u ju6pi` (logg).
 
 ## 9. Endringer
+
+**1.3.0 (14. november 2026)**
+- BANK A/B på MPK mini Plus velger side. Bank A (noter 36–43) er side 1, bank B (noter 44–51) er side 2. Siden bytter på første pad-trykk etter bankbyttet, og det trykket utfører paddens jobb på den nye siden. Knottene K1–K8 følger siden.
+- SIDE 1- og SIDE 2-padene (pad 6 og pad 2 i 1.2.0) er borte.
+- Venstre fire pads, like på begge sider: pad 5 = forrige lyd (−1), pad 6 = neste lyd (+1), pad 1 = forrige bank (−8), pad 2 = neste bank (+8). En bank er en gruppe på åtte. Patchnummeret beholdes (A23 → A13, A13 → A23, A11 går rundt til B81, B83 går rundt til A13).
+- Høyre fire pads er som i 1.2.0, på samme plass. Side 1: LEVEL +/− (pad 7/3), CHORUS (pad 8), ENV/GATE (pad 4). Side 2: VCF-polaritet (pad 7), PWM LFO/MAN (pad 8), puls (pad 3), sag (pad 4).
+- Posisjonslampen (av / svak / rød / sterk for A11–A48, A51–A88, B11–B48, B51–B88) lyser på både lyd-padene og bank-padene.
+- Pad-lys for side 1 sendes til noter 36–43 og for side 2 til 44–51. Ekko-vakten på 80 ms gjelder bare pad-kanal 10 og bare den noten som ble sendt.
+- `mapping_version = 2`. Et gammelt `ju6.conf` på JU6DATA uten denne versjonen kan ikke overstyre pad-notene. `ju6/status.txt` skriver kjørende versjon og pad-mapping.
+- Anbefalt MPK-oppsett: tangenter kanal 1, pads kanal 10 i Note-modus, knotter absolute CC 70–77.
 
 **1.2.0 (9. november 2026)**
 - Tosiders panel etter den rene skissen. Pad 6 velger SIDE 1, pad 2 velger SIDE 2. Aktiv side-pad lyser sterkt rødt, den andre er slukket.

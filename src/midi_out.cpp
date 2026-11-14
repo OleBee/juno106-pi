@@ -92,7 +92,7 @@ void MidiOut::run() {
         if (m.vel == 0) snd_seq_ev_set_noteoff(&ev, m.ch, m.note, 0);
         else snd_seq_ev_set_noteon(&ev, m.ch, m.note, m.vel);
         snd_seq_event_output_direct(seq, &ev);
-        mEcho.arm(m.note);
+        mEcho.arm(m.ch, m.note);
         sent = true;
       }
       if (!sent) usleep(4000);
