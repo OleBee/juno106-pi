@@ -6,14 +6,15 @@ skrivebeskyttet, så det er trygt å bare trekke ut strømmen.
 
 ju6/ju6.conf          Dine innstillinger. Alle linjer er kommentert ut; fjern #
                       foran en linje og endre verdien. Overstyrer standardene.
-ju6/patches.syx       Lagrede patcher (lages når du lagrer første gang:
-                      hold en patch-pad i 1,5 sekunder). Standard Juno-106-
-                      sysex (APR), kan åpnes i patch-editorer.
+ju6/patches.syx       Lagrede patcher, hvis filen finnes. Panelet skriver ikke
+                      patcher. Standard Juno-106-sysex (APR), kan åpnes i
+                      patch-editorer.
 ju6/names.txt         Navn på lagrede patcher.
 ju6/state.txt         Sist valgte patch og bufferinnstilling (automatisk).
-ju6/status.txt        Hva synthen fant ved siste oppstart: lydutgang, lydkort
-                      (RPiDAC = Raspberry Pi DAC+), buffer, latens og antall
-                      MIDI-enheter. Nyttig uten skjerm.
+ju6/status.txt        Hva synthen fant ved siste oppstart. Øverst står
+                      kjørende versjon (versjon: 1.3.0) og pad-mapping.
+                      Deretter lydutgang, lydkort (RPiDAC = Raspberry Pi DAC+),
+                      buffer, latens og antall MIDI-enheter. Nyttig uten skjerm.
 ju6/fabrikk-A-B.syx   Fabrikkbankene A og B (kopi, til referanse).
 
 Tilbakestille til fabrikklyder: slett patches.syx og names.txt.

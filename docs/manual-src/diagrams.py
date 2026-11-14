@@ -150,17 +150,18 @@ def _pad_grid(x0, title, labels, sub, color, y_title=22):
     return s
 
 def pad_map():
-    """Bank A (patches) beside a reminder that bank B is the two-page panel."""
-    A = [("PREV −1", "sound"), ("SIDE 2", "page"), ("LEVEL −", "or pulse"), ("GATE", "or saw"),
-         ("NEXT +1", "sound"), ("SIDE 1", "page"), ("LEVEL +", "or polarity"), ("CHORUS", "or LFO/MAN")]
-    b = _pad_grid(10, "PADS  ·  both banks", A, "the job of pads 3, 4, 7 and 8 changes with the side", "#4a4a4a")
-    b += f'<text x="470" y="40" font-size="14" font-weight="bold" fill="{INK}">BOTH PAD BANKS</text>'
-    b += f'<text x="470" y="62" font-size="11" fill="{INK}">Bank A and bank B do the same panel.</text>'
-    b += f'<text x="470" y="82" font-size="11" fill="{INK}">Pad 6 selects SIDE 1. Pad 2 selects SIDE 2.</text>'
-    b += f'<text x="470" y="102" font-size="11" fill="{INK}">The active side’s pad stays lit;</text>'
-    b += f'<text x="470" y="118" font-size="11" fill="{INK}">the other page pad stays off.</text>'
-    b += f'<text x="470" y="146" font-size="11" fill="{INK}">Pad 5 = next sound. Pad 1 = previous.</text>'
-    b += f'<text x="470" y="164" font-size="11" fill="{GREY}">One sound = one patch, slots 0–127.</text>'
+    """Pad grid: bank A is side 1, bank B is side 2."""
+    A = [("BANK −8", "group"), ("BANK +8", "group"), ("LEVEL −", "or pulse"), ("GATE", "or saw"),
+         ("SOUND −1", "patch"), ("SOUND +1", "patch"), ("LEVEL +", "or polarity"), ("CHORUS", "or LFO/MAN")]
+    b = _pad_grid(10, "PADS  ·  bank selects the side", A, "pads 5, 6, 1 and 2 are the same on both sides", "#4a4a4a")
+    b += f'<text x="470" y="40" font-size="14" font-weight="bold" fill="{INK}">BANK A/B SELECTS THE SIDE</text>'
+    b += f'<text x="470" y="62" font-size="11" fill="{INK}">Bank A (notes 36–43) is SIDE 1.</text>'
+    b += f'<text x="470" y="82" font-size="11" fill="{INK}">Bank B (notes 44–51) is SIDE 2.</text>'
+    b += f'<text x="470" y="102" font-size="11" fill="{INK}">The side changes on the first pad</text>'
+    b += f'<text x="470" y="118" font-size="11" fill="{INK}">press after you change bank.</text>'
+    b += f'<text x="470" y="146" font-size="11" fill="{INK}">Pad 6 / 5 = next / previous sound.</text>'
+    b += f'<text x="470" y="164" font-size="11" fill="{INK}">Pad 2 / 1 = next / previous group of 8.</text>'
+    b += f'<text x="470" y="184" font-size="11" fill="{GREY}">LEDs: side 1 on 36–43, side 2 on 44–51.</text>'
     return svg(900, 250, b, "fig")
 
 def side_pads(title, labels, sub):
@@ -195,7 +196,7 @@ def pi5_connections(dac=False):
     x, y, w, h = 300, 120, 300, 200
     b += f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="#1f6f43" stroke="{INK}" stroke-width="2"/>'
     b += f'<text x="{x+w/2}" y="{y+h/2-6}" font-size="16" font-weight="bold" fill="#fff" text-anchor="middle">Raspberry Pi 5</text>'
-    b += f'<text x="{x+w/2}" y="{y+h/2+12}" font-size="10" fill="#e6f2ea" text-anchor="middle">8 GB · JU-6 Pi v1.2.0 microSD</text>'
+    b += f'<text x="{x+w/2}" y="{y+h/2+12}" font-size="10" fill="#e6f2ea" text-anchor="middle">8 GB · JU-6 Pi v1.3.0 microSD</text>'
     # GPIO header along top edge
     b += f'<rect x="{x+40}" y="{y+8}" width="200" height="16" fill="#111"/>'
     for i in range(20):
